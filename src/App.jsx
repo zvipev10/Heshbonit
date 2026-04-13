@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
+const API_URL = '/api/invoices/upload'
+
 function App() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState([])
+  const [error, setError] = useState(null)
+  const [selectedRows, setSelectedRows] = useState(new Set())
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -17,32 +21,64 @@ function App() {
     }
   }, [result])
 
-  const processFiles = (selectedFiles) => {
-    if (!selectedFiles.length) {
-      return
-    }
+  const processFiles = async (selectedFiles) => {
+    if (!selectedFiles.length) return
 
-    console.log('Starting upload process...')
     setProcessing(true)
     setResult([])
+    setSelectedRows(new Set())
+    setError(null)
 
-    setTimeout(() => {
-      console.log('Processing complete, showing results...')
-      const results = selectedFiles.map((file, index) => ({
-        date: new Date().toLocaleDateString('he-IL'),
-        payment: 1250.00 + (index * 100),
-        vat: (1250.00 + (index * 100)) * 0.15,
-        total: (1250.00 + (index * 100)) * 1.15,
-        invoiceNumber: `INV-2024-00${index + 1}`,
-        supplier: `ספק ${index + 1}`,
-        fileName: file.name,
-        fileUrl: URL.createObjectURL(file)
-      }))
+    const formData = new FormData()
+    selectedFiles.forEach(file => formData.append('invoices', file))
+
+    const fileUrlMap = {}
+    selectedFiles.forEach(file => {
+      fileUrlMap[file.name] = URL.createObjectURL(file)
+    })
+
+    try {
+      const response = await fetch(API_URL, { method: 'POST', body: formData })
+      const json = await response.json()
+
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || 'שגיאה בעיבוד החשבוניות')
+      }
+
+      const results = json.results.map((r) => {
+        if (!r.success) {
+          return {
+            failed: true,
+            fileName: r.filename,
+            fileUrl: fileUrlMap[r.filename] ?? null,
+            error: r.error,
+          }
+        }
+
+        const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
+        const vat = totalWithVat != null && totalWithoutVat != null
+          ? totalWithVat - totalWithoutVat
+          : null
+
+        return {
+          failed: false,
+          fileName: r.filename,
+          fileUrl: fileUrlMap[r.filename] ?? null,
+          supplier: vendorName ?? '—',
+          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+          payment: totalWithoutVat,
+          vat,
+          total: totalWithVat,
+          confidence,
+        }
+      })
 
       setResult(results)
+    } catch (err) {
+      setError(err.message)
+    } finally {
       setProcessing(false)
-      console.log('Results displayed:', results)
-    }, 2000)
+    }
   }
 
   const handleFileChange = (e) => {
@@ -60,6 +96,37 @@ function App() {
     if (processing) return
     cameraInputRef.current?.click()
   }
+
+  const handleDelete = (index) => {
+    setResult(prev => {
+      const removed = prev[index]
+      if (removed?.fileUrl) URL.revokeObjectURL(removed.fileUrl)
+      return prev.filter((_, i) => i !== index)
+    })
+    setSelectedRows(prev => {
+      const next = new Set()
+      prev.forEach(i => {
+        if (i < index) next.add(i)
+        else if (i > index) next.add(i - 1)
+      })
+      return next
+    })
+  }
+
+  const toggleRow = (index) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev)
+      next.has(index) ? next.delete(index) : next.add(index)
+      return next
+    })
+  }
+
+  const allSelected = result.length > 0 && selectedRows.size === result.length
+  const toggleAll = () => {
+    setSelectedRows(allSelected ? new Set() : new Set(result.map((_, i) => i)))
+  }
+
+  const successResults = result.filter(r => !r.failed)
 
   return (
     <div className="container">
@@ -118,9 +185,14 @@ function App() {
         </div>
       )}
 
-      {result && result.length > 0 && (
+      {error && (
+        <div className="error-banner">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {result.length > 0 && (
         <section className="results">
-          {console.log('Rendering results:', result)}
           <div className="results-header">
             <h2>דוח חשבוניות ({result.length})</h2>
           </div>
@@ -128,21 +200,24 @@ function App() {
           <div className="summary-cards">
             <div className="summary-card summary-card-before-vat">
               <span className="summary-label">לפני מע"מ</span>
-              <strong>₪{result.reduce((sum, res) => sum + res.payment, 0).toFixed(2)}</strong>
+              <strong>₪{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
             </div>
             <div className="summary-card summary-card-vat">
               <span className="summary-label">מע"מ</span>
-              <strong>₪{result.reduce((sum, res) => sum + res.vat, 0).toFixed(2)}</strong>
+              <strong>₪{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
             </div>
             <div className="summary-card summary-card-total">
               <span className="summary-label">סה"כ</span>
-              <strong>₪{result.reduce((sum, res) => sum + res.total, 0).toFixed(2)}</strong>
+              <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
             </div>
           </div>
 
           <table className="results-table">
             <thead>
               <tr>
+                <th>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                </th>
                 <th>#</th>
                 <th>תאריך</th>
                 <th>ספק</th>
@@ -153,38 +228,76 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {result.map((res, i) => (
-                <tr key={i}>
+              {result.map((res, i) => res.failed ? (
+                <tr key={i} className="row-failed">
+                  <td>
+                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
+                  </td>
+                  <td>{i + 1}</td>
+                  <td colSpan={4} className="failed-cell">{res.fileName} — {res.error}</td>
+                  <td></td>
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="action-button action-button-delete"
+                        onClick={() => handleDelete(i)}
+                        title={`מחק את ${res.fileName}`}
+                        aria-label={`מחק את ${res.fileName}`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6" />
+                          <path d="M6.5 6l1 12.25A1.75 1.75 0 0 0 9.24 20h5.52a1.75 1.75 0 0 0 1.74-1.75L17.5 6" />
+                          <path d="M10 10.25v5.5" />
+                          <path d="M14 10.25v5.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={i} className={selectedRows.has(i) ? 'row-selected' : ''}>
+                  <td>
+                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
+                  </td>
                   <td>{i + 1}</td>
                   <td>{res.date}</td>
                   <td>
                     <div className="supplier-cell">
                       <span className="supplier-name">{res.supplier}</span>
-                      <span className="supplier-meta">{res.invoiceNumber}</span>
+                      {res.confidence !== 'high' && (
+                        <span className={`confidence-badge confidence-${res.confidence}`}>
+                          {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td>₪{res.payment.toFixed(2)}</td>
-                  <td>₪{res.vat.toFixed(2)}</td>
-                  <td>₪{res.total.toFixed(2)}</td>
+                  <td>₪{res.payment != null ? res.payment.toFixed(2) : '—'}</td>
+                  <td>₪{res.vat != null ? res.vat.toFixed(2) : '—'}</td>
+                  <td>₪{res.total != null ? res.total.toFixed(2) : '—'}</td>
                   <td>
                     <div className="row-actions">
-                      <a
-                        href={res.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="file-link"
-                        title={`פתח את ${res.fileName}`}
-                        aria-label={`פתח את ${res.fileName}`}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 5h5v5" />
-                          <path d="M10 14L19 5" />
-                          <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
-                        </svg>
-                      </a>
+                      {res.fileUrl && (
+                        <a
+                          href={res.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="file-link"
+                          title={`פתח את ${res.fileName}`}
+                          aria-label={`פתח את ${res.fileName}`}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 5h5v5" />
+                            <path d="M10 14L19 5" />
+                            <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
+                          </svg>
+                        </a>
+                      )}
                       <button
                         type="button"
                         className="action-button action-button-delete"
+                        onClick={() => handleDelete(i)}
                         title={`מחק את ${res.fileName}`}
                         aria-label={`מחק את ${res.fileName}`}
                       >
