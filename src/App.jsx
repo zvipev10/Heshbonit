@@ -25,7 +25,6 @@ function App() {
     if (!selectedFiles.length) return
 
     setProcessing(true)
-    setResult([])
     setSelectedRows(new Set())
     setError(null)
 
@@ -73,7 +72,18 @@ function App() {
         }
       })
 
-      setResult(results)
+      setResult(prev => {
+        const combined = [...prev, ...results]
+        return combined.sort((a, b) => {
+          if (a.failed) return 1
+          if (b.failed) return -1
+          if (!a.date || a.date === '—') return 1
+          if (!b.date || b.date === '—') return -1
+        const dateA = new Date(a.date.split('.').reverse().join('-'))
+        const dateB = new Date(b.date.split('.').reverse().join('-'))
+        return dateA - dateB
+        })
+      })
     } catch (err) {
       setError(err.message)
     } finally {
