@@ -122,7 +122,7 @@ function App() {
   const handleCopyWithoutVat = () => {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
-      return { ...res, payment: res.total }
+      return { ...res, payment: res.total, vat: 0 }
     }))
   }
 
