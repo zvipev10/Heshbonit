@@ -31,10 +31,7 @@ function App() {
     const formData = new FormData()
     selectedFiles.forEach(file => formData.append('invoices', file))
 
-    const fileUrlMap = {}
-    selectedFiles.forEach(file => {
-      fileUrlMap[file.name] = URL.createObjectURL(file)
-    })
+    const fileUrls = selectedFiles.map(file => URL.createObjectURL(file))
 
     try {
       const response = await fetch(API_URL, { method: 'POST', body: formData })
@@ -44,12 +41,12 @@ function App() {
         throw new Error(json.error || 'שגיאה בעיבוד החשבוניות')
       }
 
-      const results = json.results.map((r) => {
+      const results = json.results.map((r, i) => {
         if (!r.success) {
           return {
             failed: true,
             fileName: r.filename,
-            fileUrl: fileUrlMap[r.filename] ?? null,
+            fileUrl: fileUrls[i] ?? null,
             error: r.error,
           }
         }
@@ -62,7 +59,7 @@ function App() {
         return {
           failed: false,
           fileName: r.filename,
-          fileUrl: fileUrlMap[r.filename] ?? null,
+          fileUrl: fileUrls[i] ?? null,
           supplier: vendorName ?? '—',
           date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
           payment: totalWithoutVat,
