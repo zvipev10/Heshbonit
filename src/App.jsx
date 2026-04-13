@@ -104,21 +104,7 @@ function App() {
     cameraInputRef.current?.click()
   }
 
-  const handleDelete = (index) => {
-    setResult(prev => {
-      const removed = prev[index]
-      if (removed?.fileUrl) URL.revokeObjectURL(removed.fileUrl)
-      return prev.filter((_, i) => i !== index)
-    })
-    setSelectedRows(prev => {
-      const next = new Set()
-      prev.forEach(i => {
-        if (i < index) next.add(i)
-        else if (i > index) next.add(i - 1)
-      })
-      return next
-    })
-  }
+
 
   const toggleRow = (index) => {
     setSelectedRows(prev => {
@@ -131,6 +117,39 @@ function App() {
   const allSelected = result.length > 0 && selectedRows.size === result.length
   const toggleAll = () => {
     setSelectedRows(allSelected ? new Set() : new Set(result.map((_, i) => i)))
+  }
+
+  const handleCopyWithoutVat = () => {
+    setResult(prev => prev.map((res, i) => {
+      if (!selectedRows.has(i) || res.failed) return res
+      return { ...res, payment: res.total }
+    }))
+  }
+
+  const handleApplyFraction = (fraction) => {
+    setResult(prev => prev.map((res, i) => {
+      if (!selectedRows.has(i) || res.failed) return res
+      const multiplier = eval(fraction)
+      return {
+        ...res,
+        payment: res.payment != null ? res.payment * multiplier : null,
+        vat: res.vat != null ? res.vat * multiplier : null,
+        total: res.total != null ? res.total * multiplier : null,
+      }
+    }))
+  }
+
+  const handleDeleteSelected = () => {
+    setResult(prev => {
+      const filtered = prev.filter((_, i) => !selectedRows.has(i))
+      filtered.forEach(res => {
+        if (res.fileUrl && !prev.find((r, idx) => r.fileUrl === res.fileUrl && !selectedRows.has(idx))) {
+          URL.revokeObjectURL(res.fileUrl)
+        }
+      })
+      return filtered
+    })
+    setSelectedRows(new Set())
   }
 
   const successResults = result.filter(r => !r.failed)
@@ -219,6 +238,27 @@ function App() {
             </div>
           </div>
 
+          {selectedRows.size > 0 && (
+            <div className="bulk-actions">
+              <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
+              <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat">
+                ללא מע"מ
+              </button>
+              <div className="bulk-action-dropdown-wrapper">
+                <select onChange={(e) => e.target.value && handleApplyFraction(e.target.value)} defaultValue="" className="bulk-action-dropdown">
+                  <option value="">סכום חלקי</option>
+                  <option value="2/3">2/3</option>
+                  <option value="1/2">1/2</option>
+                  <option value="1/3">1/3</option>
+                  <option value="1/4">1/4</option>
+                </select>
+              </div>
+              <button type="button" onClick={handleDeleteSelected} className="bulk-action-button bulk-action-delete">
+                מחק
+              </button>
+            </div>
+          )}
+
           <table className="results-table">
             <thead>
               <tr>
@@ -243,25 +283,7 @@ function App() {
                   <td>{i + 1}</td>
                   <td colSpan={4} className="failed-cell">{res.fileName} — {res.error}</td>
                   <td></td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="action-button action-button-delete"
-                        onClick={() => handleDelete(i)}
-                        title={`מחק את ${res.fileName}`}
-                        aria-label={`מחק את ${res.fileName}`}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6" />
-                          <path d="M6.5 6l1 12.25A1.75 1.75 0 0 0 9.24 20h5.52a1.75 1.75 0 0 0 1.74-1.75L17.5 6" />
-                          <path d="M10 10.25v5.5" />
-                          <path d="M14 10.25v5.5" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+                  <td></td>
                 </tr>
               ) : (
                 <tr key={i} className={selectedRows.has(i) ? 'row-selected' : ''}>
@@ -301,21 +323,6 @@ function App() {
                           </svg>
                         </a>
                       )}
-                      <button
-                        type="button"
-                        className="action-button action-button-delete"
-                        onClick={() => handleDelete(i)}
-                        title={`מחק את ${res.fileName}`}
-                        aria-label={`מחק את ${res.fileName}`}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6" />
-                          <path d="M6.5 6l1 12.25A1.75 1.75 0 0 0 9.24 20h5.52a1.75 1.75 0 0 0 1.74-1.75L17.5 6" />
-                          <path d="M10 10.25v5.5" />
-                          <path d="M14 10.25v5.5" />
-                        </svg>
-                      </button>
                     </div>
                   </td>
                 </tr>
