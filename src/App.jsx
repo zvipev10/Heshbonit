@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
-const API_URL = '/api/invoices/upload'
+const API_URL = import.meta.env.VITE_API_URL ?? '/api/invoices/upload'
 
 function App() {
   const [processing, setProcessing] = useState(false)
