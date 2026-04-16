@@ -220,19 +220,11 @@ function App() {
 
   const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
     const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
-    const inputRef = useRef(null)
-
-    useEffect(() => {
-      if (isEditing && inputRef.current) {
-        inputRef.current.focus()
-        inputRef.current.select()
-      }
-    }, [isEditing])
 
     if (isEditing) {
       return (
         <input
-          ref={inputRef}
+          autoFocus
           type={inputType}
           value={result[rowIndex][field] ?? ''}
           onChange={(e) => updateRowValue(rowIndex, field, e.target.value)}
