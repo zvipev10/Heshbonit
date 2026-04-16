@@ -21,17 +21,30 @@ function App() {
         const json = await response.json()
         
         if (json.success && json.invoices) {
-          setResult(json.invoices.map(inv => ({
-            ...inv,
-            failed: false,
-            fileUrl: null,
-            supplier: inv.vendorName ?? '—',
-            date: inv.date ? new Date(inv.date).toLocaleDateString('he-IL') : '—',
-            payment: inv.totalWithoutVat,
-            vat: inv.vat,
-            total: inv.totalWithVat,
-            fileName: inv.fileName
-          })))
+          setResult(json.invoices.map(inv => {
+            // Convert ISO date (2026-04-16) to Hebrew format safely
+            let hebrewDate = '—'
+            if (inv.date) {
+              try {
+                const [year, month, day] = inv.date.split('-')
+                hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
+              } catch (e) {
+                hebrewDate = '—'
+              }
+            }
+
+            return {
+              ...inv,
+              failed: false,
+              fileUrl: null,
+              supplier: inv.vendorName ?? '—',
+              date: hebrewDate,
+              payment: inv.totalWithoutVat,
+              vat: inv.vat,
+              total: inv.totalWithVat,
+              fileName: inv.fileName
+            }
+          }))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -188,11 +201,25 @@ function App() {
     setError(null)
     
     try {
+      // Helper to convert Hebrew date format back to ISO
+      const dateToISO = (hebrewDate) => {
+        if (!hebrewDate || hebrewDate === '—') return null
+        // Convert from "16.4.2026" to "2026-04-16"
+        const parts = hebrewDate.split('.')
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0')
+          const month = parts[1].padStart(2, '0')
+          const year = parts[2]
+          return `${year}-${month}-${day}`
+        }
+        return hebrewDate
+      }
+
       // Prepare data for saving (exclude temporary properties)
       const invoicesToSave = result.map(res => ({
         fileName: res.fileName,
         vendorName: res.supplier === '—' ? null : res.supplier,
-        date: res.date === '—' ? null : res.date,
+        date: dateToISO(res.date),
         totalWithVat: res.total,
         totalWithoutVat: res.payment,
         vat: res.vat,
