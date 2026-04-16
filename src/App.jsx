@@ -450,7 +450,7 @@ function App() {
               ) : (
                 <tr key={i} className={selectedRows.has(i) ? 'row-selected' : ''}>
                   <td>
-                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} disabled={editingRowIndex !== null} />
+                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
                   </td>
                   <td>{i + 1}</td>
                   <td>
