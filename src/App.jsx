@@ -2,15 +2,46 @@ import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/invoices/upload'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/upload', '') ?? '/api/invoices'
 
 function App() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState([])
   const [error, setError] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
+  const [saving, setSaving] = useState(false)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
+  // Load data from database on mount
+  useEffect(() => {
+    const loadDataFromDatabase = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/list`)
+        const json = await response.json()
+        
+        if (json.success && json.invoices) {
+          setResult(json.invoices.map(inv => ({
+            ...inv,
+            failed: false,
+            fileUrl: null,
+            supplier: inv.vendorName ?? '—',
+            date: inv.date ? new Date(inv.date).toLocaleDateString('he-IL') : '—',
+            payment: inv.totalWithoutVat,
+            vat: inv.vat,
+            total: inv.totalWithVat,
+            fileName: inv.fileName
+          })))
+        }
+      } catch (err) {
+        console.error('Failed to load data from database:', err)
+      }
+    }
+
+    loadDataFromDatabase()
+  }, [])
+
+  // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       result.forEach((res) => {
@@ -152,6 +183,44 @@ function App() {
     setSelectedRows(new Set())
   }
 
+  const handleSaveToDatabase = async () => {
+    setSaving(true)
+    setError(null)
+    
+    try {
+      // Prepare data for saving (exclude temporary properties)
+      const invoicesToSave = result.map(res => ({
+        fileName: res.fileName,
+        vendorName: res.supplier === '—' ? null : res.supplier,
+        date: res.date === '—' ? null : res.date,
+        totalWithVat: res.total,
+        totalWithoutVat: res.payment,
+        vat: res.vat,
+        currency: 'ILS',
+        confidence: res.confidence || 'medium'
+      }))
+
+      const response = await fetch(`${API_BASE}/save-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoices: invoicesToSave })
+      })
+
+      const json = await response.json()
+      
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || 'Failed to save to database')
+      }
+
+      setError(null)
+      alert(`בסיס הנתונים עודכן בהצלחה! ${json.savedCount} חשבוניות נשמרו`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const successResults = result.filter(r => !r.failed)
 
   return (
@@ -236,6 +305,17 @@ function App() {
               <span className="summary-label">סה"כ</span>
               <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
             </div>
+          </div>
+
+          <div className="save-section">
+            <button 
+              type="button" 
+              onClick={handleSaveToDatabase} 
+              className="save-button"
+              disabled={saving || result.length === 0}
+            >
+              {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
+            </button>
           </div>
 
           {selectedRows.size > 0 && (

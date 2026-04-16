@@ -560,3 +560,38 @@ input[type="file"] {
   background-color: #f0f9ff;
   box-shadow: 0 0 0 2px #bfdbfe;
 }
+
+.save-section {
+  margin: 24px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.save-button {
+  padding: 12px 32px;
+  border: 2px solid #10b981;
+  border-radius: 10px;
+  background: white;
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+}
+
+.save-button:hover:not(:disabled) {
+  background: #10b981;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+}
+
+.save-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
