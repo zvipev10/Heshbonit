@@ -78,9 +78,8 @@ function App() {
 
         if (json.success && json.invoices) {
           console.log('Loaded invoices from DB:', json.invoices)
-          // Backend already returns invoices ordered by createdAt DESC — preserve that order
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-          setResult(mappedInvoices)
+          setResult(sortResultsByDateDesc(mappedInvoices))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -330,9 +329,8 @@ function App() {
       const listJson = await listResponse.json()
 
       if (listJson.success && listJson.invoices) {
-        // Backend already returns invoices ordered by createdAt DESC — preserve that order
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(mappedInvoices)
+        setResult(sortResultsByDateDesc(mappedInvoices))
       }
 
       setError(null)
