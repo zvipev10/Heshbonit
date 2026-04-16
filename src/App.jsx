@@ -10,8 +10,6 @@ function App() {
   const [error, setError] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
-  const [editingRowIndex, setEditingRowIndex] = useState(null)
-  const [editingData, setEditingData] = useState({})
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -205,37 +203,18 @@ function App() {
     setSelectedRows(new Set())
   }
 
-  const startEditingRow = (index) => {
-    setEditingRowIndex(index)
-    setEditingData({
-      date: result[index].date,
-      supplier: result[index].supplier,
-      payment: result[index].payment,
-      vat: result[index].vat,
-      total: result[index].total
-    })
-  }
-
-  const cancelEditing = () => {
-    setEditingRowIndex(null)
-    setEditingData({})
-  }
-
-  const saveEditingRow = (index) => {
+  const updateRowValue = (index, field, value) => {
     setResult(prev => {
       const updated = [...prev]
-      updated[index] = {
-        ...updated[index],
-        date: editingData.date,
-        supplier: editingData.supplier === '—' ? '—' : editingData.supplier,
-        payment: editingData.payment === '' || editingData.payment === null ? null : parseFloat(editingData.payment),
-        vat: editingData.vat === '' || editingData.vat === null ? null : parseFloat(editingData.vat),
-        total: editingData.total === '' || editingData.total === null ? null : parseFloat(editingData.total)
+      if (field === 'supplier') {
+        updated[index].supplier = value === '' ? '—' : value
+      } else if (field === 'payment' || field === 'vat' || field === 'total') {
+        updated[index][field] = value === '' || value === null ? null : parseFloat(value)
+      } else if (field === 'date') {
+        updated[index].date = value
       }
       return updated
     })
-    setEditingRowIndex(null)
-    setEditingData({})
   }
 
   const handleSaveToDatabase = async () => {
@@ -474,61 +453,93 @@ function App() {
                     <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} disabled={editingRowIndex !== null} />
                   </td>
                   <td>{i + 1}</td>
-                  {editingRowIndex === i ? (
-                    // Edit mode
-                    <>
-                      <td><input type="text" value={editingData.date} onChange={(e) => setEditingData({...editingData, date: e.target.value})} className="edit-input" /></td>
-                      <td><input type="text" value={editingData.supplier} onChange={(e) => setEditingData({...editingData, supplier: e.target.value})} className="edit-input" /></td>
-                      <td><input type="number" value={editingData.payment ?? ''} onChange={(e) => setEditingData({...editingData, payment: e.target.value})} className="edit-input" placeholder="0.00" /></td>
-                      <td><input type="number" value={editingData.vat ?? ''} onChange={(e) => setEditingData({...editingData, vat: e.target.value})} className="edit-input" placeholder="0.00" /></td>
-                      <td><input type="number" value={editingData.total ?? ''} onChange={(e) => setEditingData({...editingData, total: e.target.value})} className="edit-input" placeholder="0.00" /></td>
-                      <td>
-                        <div className="row-actions edit-actions">
-                          <button className="edit-save-btn" onClick={() => saveEditingRow(i)} title="שמור">💾</button>
-                          <button className="edit-cancel-btn" onClick={cancelEditing} title="ביטול">✖</button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    // View mode
-                    <>
-                      <td>{res.date}</td>
-                      <td>
-                        <div className="supplier-cell">
-                          <span className="supplier-name">{res.supplier}</span>
-                          {res.confidence !== 'high' && (
-                            <span className={`confidence-badge confidence-${res.confidence}`}>
-                              {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>₪{res.payment != null ? res.payment.toFixed(2) : '—'}</td>
-                      <td>₪{res.vat != null ? res.vat.toFixed(2) : '—'}</td>
-                      <td>₪{res.total != null ? res.total.toFixed(2) : '—'}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button className="edit-btn" onClick={() => startEditingRow(i)} title="ערוך">✏️</button>
-                          {res.fileUrl && (
-                            <a
-                              href={res.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="file-link"
-                              title={`פתח את ${res.fileName}`}
-                              aria-label={`פתח את ${res.fileName}`}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 5h5v5" />
-                                <path d="M10 14L19 5" />
-                                <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
-                              </svg>
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td>
+                    <input
+                      type="text"
+                      value={result[i].date}
+                      onChange={(e) => updateRowValue(i, 'date', e.target.value)}
+                      onBlur={(e) => updateRowValue(i, 'date', e.target.value)}
+                      className="cell-input"
+                    />
+                  </td>
+                  <td>
+                    <div className="supplier-cell">
+                      <input
+                        type="text"
+                        value={result[i].supplier}
+                        onChange={(e) => updateRowValue(i, 'supplier', e.target.value)}
+                        onBlur={(e) => updateRowValue(i, 'supplier', e.target.value)}
+                        className="cell-input supplier-input"
+                      />
+                      {result[i].confidence !== 'high' && (
+                        <span className={`confidence-badge confidence-${result[i].confidence}`}>
+                          {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="currency-input-wrapper">
+                      <input
+                        type="number"
+                        value={result[i].payment ?? ''}
+                        onChange={(e) => updateRowValue(i, 'payment', e.target.value)}
+                        onBlur={(e) => updateRowValue(i, 'payment', e.target.value)}
+                        className="cell-input"
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                      <span className="currency-prefix">₪</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="currency-input-wrapper">
+                      <input
+                        type="number"
+                        value={result[i].vat ?? ''}
+                        onChange={(e) => updateRowValue(i, 'vat', e.target.value)}
+                        onBlur={(e) => updateRowValue(i, 'vat', e.target.value)}
+                        className="cell-input"
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                      <span className="currency-prefix">₪</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="currency-input-wrapper">
+                      <input
+                        type="number"
+                        value={result[i].total ?? ''}
+                        onChange={(e) => updateRowValue(i, 'total', e.target.value)}
+                        onBlur={(e) => updateRowValue(i, 'total', e.target.value)}
+                        className="cell-input"
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                      <span className="currency-prefix">₪</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      {result[i].fileUrl && (
+                        <a
+                          href={result[i].fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="file-link"
+                          title={`פתח את ${result[i].fileName}`}
+                          aria-label={`פתח את ${result[i].fileName}`}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 5h5v5" />
+                            <path d="M10 14L19 5" />
+                            <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
