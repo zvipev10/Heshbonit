@@ -301,21 +301,6 @@ function App() {
       const listJson = await listResponse.json()
       
       if (listJson.success && listJson.invoices) {
-        const mapped = listJson.invoices.map(inv => {
-        ...
-        })
-
-        mapped.sort((a, b) => {
-        if (!a.date || a.date === '—') return 1
-        if (!b.date || b.date === '—') return -1
-
-        const dateA = new Date(a.date.split('.').reverse().join('-'))
-        const dateB = new Date(b.date.split('.').reverse().join('-'))
-
-        return dateB - dateA // 👈 reverse (new → old)
-      })
-
-        setResult(mapped)
         setResult(listJson.invoices.map(inv => {
           let hebrewDate = '—'
           if (inv.date) {
