@@ -47,7 +47,7 @@ function App() {
     if (inv.date) {
       try {
         const [year, month, day] = inv.date.split('-')
-        hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
+        hebrewDate = new Date(year, parseInt(month, 10) - 1, day).toLocaleDateString('he-IL')
       } catch (e) {
         hebrewDate = '—'
       }
@@ -78,8 +78,9 @@ function App() {
 
         if (json.success && json.invoices) {
           console.log('Loaded invoices from DB:', json.invoices)
+          // Backend already returns invoices ordered by createdAt DESC — preserve that order
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-          setResult(sortResultsByDateDesc(mappedInvoices))
+          setResult(mappedInvoices)
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -197,7 +198,15 @@ function App() {
   const handleApplyFraction = (fraction) => {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
-      const multiplier = eval(fraction)
+      
+      const fractions = {
+        '2/3': 2/3,
+        '1/2': 0.5,
+        '1/3': 1/3,
+        '1/4': 0.25
+      }
+      const multiplier = fractions[fraction] || 1
+      
       return {
         ...res,
         payment: res.payment != null ? res.payment * multiplier : null,
@@ -321,8 +330,9 @@ function App() {
       const listJson = await listResponse.json()
 
       if (listJson.success && listJson.invoices) {
+        // Backend already returns invoices ordered by createdAt DESC — preserve that order
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateDesc(mappedInvoices))
+        setResult(mappedInvoices)
       }
 
       setError(null)
