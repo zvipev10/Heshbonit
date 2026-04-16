@@ -21,6 +21,7 @@ function App() {
         const json = await response.json()
         
         if (json.success && json.invoices) {
+          console.log('Loaded invoices from DB:', json.invoices)
           setResult(json.invoices.map(inv => {
             // Convert ISO date (2026-04-16) to Hebrew format safely
             let hebrewDate = '—'
@@ -35,6 +36,7 @@ function App() {
 
             // Build file URL from API endpoint instead of object URL
             const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
+            console.log(`Invoice ${inv.fileName}: id=${inv.id}, fileUrl=${fileUrl}`)
 
             return {
               ...inv,
