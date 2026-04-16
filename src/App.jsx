@@ -14,43 +14,71 @@ function App() {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
+  const parseHebrewDate = (value) => {
+    if (!value || value === '—') return null
+
+    const parts = value.split('.')
+    if (parts.length !== 3) return null
+
+    const [day, month, year] = parts
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day))
+
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const sortResultsByDateDesc = (items) => {
+    return [...items].sort((a, b) => {
+      if (a.failed) return 1
+      if (b.failed) return -1
+
+      const dateA = parseHebrewDate(a.date)
+      const dateB = parseHebrewDate(b.date)
+
+      if (!dateA) return 1
+      if (!dateB) return -1
+
+      return dateB - dateA
+    })
+  }
+
+  const mapInvoiceFromDatabase = (inv) => {
+    let hebrewDate = '—'
+    if (inv.date) {
+      try {
+        const [year, month, day] = inv.date.split('-')
+        hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
+      } catch (e) {
+        hebrewDate = '—'
+      }
+    }
+
+    const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
+    console.log(`Invoice ${inv.fileName}: id=${inv.id}, fileUrl=${fileUrl}`)
+
+    return {
+      ...inv,
+      failed: false,
+      fileUrl,
+      supplier: inv.vendorName ?? '—',
+      date: hebrewDate,
+      payment: inv.totalWithoutVat,
+      vat: inv.vat,
+      total: inv.totalWithVat,
+      fileName: inv.fileName
+    }
+  }
+
   // Load data from database on mount
   useEffect(() => {
     const loadDataFromDatabase = async () => {
       try {
         const response = await fetch(`${API_BASE}/list`)
         const json = await response.json()
-        
+
         if (json.success && json.invoices) {
           console.log('Loaded invoices from DB:', json.invoices)
-          setResult(json.invoices.map(inv => {
-            // Convert ISO date (2026-04-16) to Hebrew format safely
-            let hebrewDate = '—'
-            if (inv.date) {
-              try {
-                const [year, month, day] = inv.date.split('-')
-                hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
-              } catch (e) {
-                hebrewDate = '—'
-              }
-            }
-
-            // Build file URL from API endpoint instead of object URL
-            const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
-            console.log(`Invoice ${inv.fileName}: id=${inv.id}, fileUrl=${fileUrl}`)
-
-            return {
-              ...inv,
-              failed: false,
-              fileUrl: fileUrl,
-              supplier: inv.vendorName ?? '—',
-              date: hebrewDate,
-              payment: inv.totalWithoutVat,
-              vat: inv.vat,
-              total: inv.totalWithVat,
-              fileName: inv.fileName
-            }
-          }))
+          const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
+          setResult(sortResultsByDateDesc(mappedInvoices))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -64,7 +92,7 @@ function App() {
   useEffect(() => {
     return () => {
       result.forEach((res) => {
-        if (res.fileUrl) {
+        if (res.fileUrl && res.fileUrl.startsWith('blob:')) {
           URL.revokeObjectURL(res.fileUrl)
         }
       })
@@ -121,18 +149,7 @@ function App() {
         }
       })
 
-      setResult(prev => {
-        const combined = [...prev, ...results]
-        return combined.sort((a, b) => {
-          if (a.failed) return 1
-          if (b.failed) return -1
-          if (!a.date || a.date === '—') return 1
-          if (!b.date || b.date === '—') return -1
-        const dateA = new Date(a.date.split('.').reverse().join('-'))
-        const dateB = new Date(b.date.split('.').reverse().join('-'))
-        return dateA - dateB
-        })
-      })
+      setResult(prev => sortResultsByDateDesc([...prev, ...results]))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -155,8 +172,6 @@ function App() {
     if (processing) return
     cameraInputRef.current?.click()
   }
-
-
 
   const toggleRow = (index) => {
     setSelectedRows(prev => {
@@ -195,7 +210,11 @@ function App() {
     setResult(prev => {
       const filtered = prev.filter((_, i) => !selectedRows.has(i))
       filtered.forEach(res => {
-        if (res.fileUrl && !prev.find((r, idx) => r.fileUrl === res.fileUrl && !selectedRows.has(idx))) {
+        if (
+          res.fileUrl &&
+          res.fileUrl.startsWith('blob:') &&
+          !prev.find((r, idx) => r.fileUrl === res.fileUrl && !selectedRows.has(idx))
+        ) {
           URL.revokeObjectURL(res.fileUrl)
         }
       })
@@ -254,7 +273,7 @@ function App() {
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError(null)
-    
+
     try {
       // Helper to convert Hebrew date format back to ISO
       const dateToISO = (hebrewDate) => {
@@ -291,7 +310,7 @@ function App() {
       })
 
       const json = await response.json()
-      
+
       if (!response.ok || !json.success) {
         throw new Error(json.error || 'Failed to save to database')
       }
@@ -299,33 +318,10 @@ function App() {
       // After successful save, reload data to get proper API file URLs
       const listResponse = await fetch(`${API_BASE}/list`)
       const listJson = await listResponse.json()
-      
+
       if (listJson.success && listJson.invoices) {
-        setResult(listJson.invoices.map(inv => {
-          let hebrewDate = '—'
-          if (inv.date) {
-            try {
-              const [year, month, day] = inv.date.split('-')
-              hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
-            } catch (e) {
-              hebrewDate = '—'
-            }
-          }
-
-          const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
-
-          return {
-            ...inv,
-            failed: false,
-            fileUrl: fileUrl,
-            supplier: inv.vendorName ?? '—',
-            date: hebrewDate,
-            payment: inv.totalWithoutVat,
-            vat: inv.vat,
-            total: inv.totalWithVat,
-            fileName: inv.fileName
-          }
-        }))
+        const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
+        setResult(sortResultsByDateDesc(mappedInvoices))
       }
 
       setError(null)
@@ -424,9 +420,9 @@ function App() {
           </div>
 
           <div className="save-section">
-            <button 
-              type="button" 
-              onClick={handleSaveToDatabase} 
+            <button
+              type="button"
+              onClick={handleSaveToDatabase}
               className="save-button"
               disabled={saving || result.length === 0}
             >
@@ -521,7 +517,7 @@ function App() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 5h5v5" />
                             <path d="M10 14L19 5" />
-                            <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
+                            <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
                           </svg>
                         </a>
                       )}
