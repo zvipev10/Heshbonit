@@ -14,10 +14,11 @@ function App() {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
-  const parseHebrewDate = (value) => {
+  const parseDisplayDate = (value) => {
     if (!value || value === '—') return null
 
-    const parts = value.split('.')
+    const normalized = value.replace(/[\/.]/g, '-').trim()
+    const parts = normalized.split('-')
     if (parts.length !== 3) return null
 
     const [day, month, year] = parts
@@ -31,8 +32,8 @@ function App() {
       if (a.failed) return 1
       if (b.failed) return -1
 
-      const dateA = parseHebrewDate(a.date)
-      const dateB = parseHebrewDate(b.date)
+      const dateA = parseDisplayDate(a.date)
+      const dateB = parseDisplayDate(b.date)
 
       if (!dateA) return 1
       if (!dateB) return -1
