@@ -10,6 +10,8 @@ function App() {
   const [error, setError] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
+  const [editingRowIndex, setEditingRowIndex] = useState(null)
+  const [editingData, setEditingData] = useState({})
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -201,6 +203,39 @@ function App() {
       return filtered
     })
     setSelectedRows(new Set())
+  }
+
+  const startEditingRow = (index) => {
+    setEditingRowIndex(index)
+    setEditingData({
+      date: result[index].date,
+      supplier: result[index].supplier,
+      payment: result[index].payment,
+      vat: result[index].vat,
+      total: result[index].total
+    })
+  }
+
+  const cancelEditing = () => {
+    setEditingRowIndex(null)
+    setEditingData({})
+  }
+
+  const saveEditingRow = (index) => {
+    setResult(prev => {
+      const updated = [...prev]
+      updated[index] = {
+        ...updated[index],
+        date: editingData.date,
+        supplier: editingData.supplier === '—' ? '—' : editingData.supplier,
+        payment: editingData.payment === '' || editingData.payment === null ? null : parseFloat(editingData.payment),
+        vat: editingData.vat === '' || editingData.vat === null ? null : parseFloat(editingData.vat),
+        total: editingData.total === '' || editingData.total === null ? null : parseFloat(editingData.total)
+      }
+      return updated
+    })
+    setEditingRowIndex(null)
+    setEditingData({})
   }
 
   const handleSaveToDatabase = async () => {
@@ -436,43 +471,64 @@ function App() {
               ) : (
                 <tr key={i} className={selectedRows.has(i) ? 'row-selected' : ''}>
                   <td>
-                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
+                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} disabled={editingRowIndex !== null} />
                   </td>
                   <td>{i + 1}</td>
-                  <td>{res.date}</td>
-                  <td>
-                    <div className="supplier-cell">
-                      <span className="supplier-name">{res.supplier}</span>
-                      {res.confidence !== 'high' && (
-                        <span className={`confidence-badge confidence-${res.confidence}`}>
-                          {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>₪{res.payment != null ? res.payment.toFixed(2) : '—'}</td>
-                  <td>₪{res.vat != null ? res.vat.toFixed(2) : '—'}</td>
-                  <td>₪{res.total != null ? res.total.toFixed(2) : '—'}</td>
-                  <td>
-                    <div className="row-actions">
-                      {res.fileUrl && (
-                        <a
-                          href={res.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="file-link"
-                          title={`פתח את ${res.fileName}`}
-                          aria-label={`פתח את ${res.fileName}`}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 5h5v5" />
-                            <path d="M10 14L19 5" />
-                            <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
-                          </svg>
-                        </a>
-                      )}
-                    </div>
-                  </td>
+                  {editingRowIndex === i ? (
+                    // Edit mode
+                    <>
+                      <td><input type="text" value={editingData.date} onChange={(e) => setEditingData({...editingData, date: e.target.value})} className="edit-input" /></td>
+                      <td><input type="text" value={editingData.supplier} onChange={(e) => setEditingData({...editingData, supplier: e.target.value})} className="edit-input" /></td>
+                      <td><input type="number" value={editingData.payment ?? ''} onChange={(e) => setEditingData({...editingData, payment: e.target.value})} className="edit-input" placeholder="0.00" /></td>
+                      <td><input type="number" value={editingData.vat ?? ''} onChange={(e) => setEditingData({...editingData, vat: e.target.value})} className="edit-input" placeholder="0.00" /></td>
+                      <td><input type="number" value={editingData.total ?? ''} onChange={(e) => setEditingData({...editingData, total: e.target.value})} className="edit-input" placeholder="0.00" /></td>
+                      <td>
+                        <div className="row-actions edit-actions">
+                          <button className="edit-save-btn" onClick={() => saveEditingRow(i)} title="שמור">💾</button>
+                          <button className="edit-cancel-btn" onClick={cancelEditing} title="ביטול">✖</button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    // View mode
+                    <>
+                      <td>{res.date}</td>
+                      <td>
+                        <div className="supplier-cell">
+                          <span className="supplier-name">{res.supplier}</span>
+                          {res.confidence !== 'high' && (
+                            <span className={`confidence-badge confidence-${res.confidence}`}>
+                              {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>₪{res.payment != null ? res.payment.toFixed(2) : '—'}</td>
+                      <td>₪{res.vat != null ? res.vat.toFixed(2) : '—'}</td>
+                      <td>₪{res.total != null ? res.total.toFixed(2) : '—'}</td>
+                      <td>
+                        <div className="row-actions">
+                          <button className="edit-btn" onClick={() => startEditingRow(i)} title="ערוך">✏️</button>
+                          {res.fileUrl && (
+                            <a
+                              href={res.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="file-link"
+                              title={`פתח את ${res.fileName}`}
+                              aria-label={`פתח את ${res.fileName}`}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 5h5v5" />
+                                <path d="M10 14L19 5" />
+                                <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
