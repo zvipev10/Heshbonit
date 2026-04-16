@@ -14,6 +14,29 @@ function App() {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
+  const sortResultsByDateDesc = (items) => {
+    return [...items].sort((a, b) => {
+      if (a.failed) return 1
+      if (b.failed) return -1
+      if (!a.date || a.date === '—') return 1
+      if (!b.date || b.date === '—') return -1
+
+      const parseHebrewDate = (value) => {
+        const parts = value.split('.')
+        if (parts.length !== 3) return new Date('invalid')
+        const [day, month, year] = parts
+        return new Date(Number(year), Number(month) - 1, Number(day))
+      }
+
+      const dateA = parseHebrewDate(a.date)
+      const dateB = parseHebrewDate(b.date)
+
+      if (Number.isNaN(dateA.getTime())) return 1
+      if (Number.isNaN(dateB.getTime())) return -1
+
+      return dateB - dateA
+    })
+}
   // Load data from database on mount
   useEffect(() => {
     const loadDataFromDatabase = async () => {
@@ -23,7 +46,7 @@ function App() {
         
         if (json.success && json.invoices) {
           console.log('Loaded invoices from DB:', json.invoices)
-          setResult(json.invoices.map(inv => {
+          const mappedInvoices = (json.invoices.map(inv => {
             // Convert ISO date (2026-04-16) to Hebrew format safely
             let hebrewDate = '—'
             if (inv.date) {
@@ -50,7 +73,8 @@ function App() {
               total: inv.totalWithVat,
               fileName: inv.fileName
             }
-          }))
+          })
+          setResult(sortResultsByDateDesc(mappedInvoices))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
