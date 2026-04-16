@@ -597,45 +597,34 @@ input[type="file"] {
 }
 
 /* Inline editable cell styles */
+.editable-cell {
+  display: block;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  user-select: none;
+}
+
+.editable-cell:hover {
+  background-color: #f0f4f8;
+  color: #1f2937;
+}
+
 .cell-input {
   width: 100%;
   padding: 4px 6px;
-  border: 1px solid #d1d5db;
+  border: 1.5px solid #3b82f6;
   border-radius: 3px;
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   direction: rtl;
   text-align: right;
   box-sizing: border-box;
-  transition: border-color 0.2s, background-color 0.2s;
-  background-color: #ffffff;
+  background-color: #eff6ff;
 }
 
 .cell-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  background-color: #eff6ff;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-.supplier-input {
-  width: 100%;
-}
-
-.currency-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.currency-input-wrapper .cell-input {
-  padding-right: 24px;
-}
-
-.currency-prefix {
-  position: absolute;
-  left: 6px;
-  color: #6b7280;
-  font-size: 0.875rem;
-  pointer-events: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }

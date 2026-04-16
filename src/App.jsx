@@ -10,6 +10,7 @@ function App() {
   const [error, setError] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
+  const [editingCell, setEditingCell] = useState(null) // {rowIndex, field}
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -215,6 +216,47 @@ function App() {
       }
       return updated
     })
+  }
+
+  const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
+    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
+    const inputRef = useRef(null)
+
+    useEffect(() => {
+      if (isEditing && inputRef.current) {
+        inputRef.current.focus()
+        inputRef.current.select()
+      }
+    }, [isEditing])
+
+    if (isEditing) {
+      return (
+        <input
+          ref={inputRef}
+          type={inputType}
+          value={result[rowIndex][field] ?? ''}
+          onChange={(e) => updateRowValue(rowIndex, field, e.target.value)}
+          onBlur={() => setEditingCell(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') setEditingCell(null)
+            if (e.key === 'Escape') setEditingCell(null)
+          }}
+          className="cell-input"
+          placeholder={inputType === 'number' ? '0.00' : ''}
+          step={inputType === 'number' ? '0.01' : undefined}
+        />
+      )
+    }
+
+    return (
+      <span
+        onClick={() => setEditingCell({ rowIndex, field })}
+        className="editable-cell"
+        title="לחץ לעריכה"
+      >
+        {displayValue}
+      </span>
+    )
   }
 
   const handleSaveToDatabase = async () => {
@@ -453,24 +495,10 @@ function App() {
                     <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
                   </td>
                   <td>{i + 1}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={result[i].date}
-                      onChange={(e) => updateRowValue(i, 'date', e.target.value)}
-                      onBlur={(e) => updateRowValue(i, 'date', e.target.value)}
-                      className="cell-input"
-                    />
-                  </td>
+                  <td>{renderEditableCell(i, 'date', result[i].date)}</td>
                   <td>
                     <div className="supplier-cell">
-                      <input
-                        type="text"
-                        value={result[i].supplier}
-                        onChange={(e) => updateRowValue(i, 'supplier', e.target.value)}
-                        onBlur={(e) => updateRowValue(i, 'supplier', e.target.value)}
-                        className="cell-input supplier-input"
-                      />
+                      {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
                       {result[i].confidence !== 'high' && (
                         <span className={`confidence-badge confidence-${result[i].confidence}`}>
                           {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
@@ -479,46 +507,13 @@ function App() {
                     </div>
                   </td>
                   <td>
-                    <div className="currency-input-wrapper">
-                      <input
-                        type="number"
-                        value={result[i].payment ?? ''}
-                        onChange={(e) => updateRowValue(i, 'payment', e.target.value)}
-                        onBlur={(e) => updateRowValue(i, 'payment', e.target.value)}
-                        className="cell-input"
-                        placeholder="0.00"
-                        step="0.01"
-                      />
-                      <span className="currency-prefix">₪</span>
-                    </div>
+                    {renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}
                   </td>
                   <td>
-                    <div className="currency-input-wrapper">
-                      <input
-                        type="number"
-                        value={result[i].vat ?? ''}
-                        onChange={(e) => updateRowValue(i, 'vat', e.target.value)}
-                        onBlur={(e) => updateRowValue(i, 'vat', e.target.value)}
-                        className="cell-input"
-                        placeholder="0.00"
-                        step="0.01"
-                      />
-                      <span className="currency-prefix">₪</span>
-                    </div>
+                    {renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}
                   </td>
                   <td>
-                    <div className="currency-input-wrapper">
-                      <input
-                        type="number"
-                        value={result[i].total ?? ''}
-                        onChange={(e) => updateRowValue(i, 'total', e.target.value)}
-                        onBlur={(e) => updateRowValue(i, 'total', e.target.value)}
-                        className="cell-input"
-                        placeholder="0.00"
-                        step="0.01"
-                      />
-                      <span className="currency-prefix">₪</span>
-                    </div>
+                    {renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}
                   </td>
                   <td>
                     <div className="row-actions">
