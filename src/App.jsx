@@ -33,10 +33,13 @@ function App() {
               }
             }
 
+            // Build file URL from API endpoint instead of object URL
+            const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
+
             return {
               ...inv,
               failed: false,
-              fileUrl: null,
+              fileUrl: fileUrl,
               supplier: inv.vendorName ?? '—',
               date: hebrewDate,
               payment: inv.totalWithoutVat,
@@ -104,6 +107,8 @@ function App() {
           failed: false,
           fileName: r.filename,
           fileUrl: fileUrls[i] ?? null,
+          fileData: r.fileData,
+          mimeType: r.mimeType,
           supplier: vendorName ?? '—',
           date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
           payment: totalWithoutVat,
@@ -218,6 +223,8 @@ function App() {
       // Prepare data for saving (exclude temporary properties)
       const invoicesToSave = result.map(res => ({
         fileName: res.fileName,
+        mimeType: res.mimeType || null,
+        fileData: res.fileData || null,
         vendorName: res.supplier === '—' ? null : res.supplier,
         date: dateToISO(res.date),
         totalWithVat: res.total,
@@ -237,6 +244,38 @@ function App() {
       
       if (!response.ok || !json.success) {
         throw new Error(json.error || 'Failed to save to database')
+      }
+
+      // After successful save, reload data to get proper API file URLs
+      const listResponse = await fetch(`${API_BASE}/list`)
+      const listJson = await listResponse.json()
+      
+      if (listJson.success && listJson.invoices) {
+        setResult(listJson.invoices.map(inv => {
+          let hebrewDate = '—'
+          if (inv.date) {
+            try {
+              const [year, month, day] = inv.date.split('-')
+              hebrewDate = new Date(year, parseInt(month) - 1, day).toLocaleDateString('he-IL')
+            } catch (e) {
+              hebrewDate = '—'
+            }
+          }
+
+          const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
+
+          return {
+            ...inv,
+            failed: false,
+            fileUrl: fileUrl,
+            supplier: inv.vendorName ?? '—',
+            date: hebrewDate,
+            payment: inv.totalWithoutVat,
+            vat: inv.vat,
+            total: inv.totalWithVat,
+            fileName: inv.fileName
+          }
+        }))
       }
 
       setError(null)
