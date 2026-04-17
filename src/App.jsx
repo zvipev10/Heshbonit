@@ -42,15 +42,6 @@ function App() {
     })
   }
 
-  const normalizeSupplier = (value) => {
-    if (!value || value === '—') return ''
-    return value
-      .toLowerCase()
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()"']/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
-
   const normalizeAmount = (value) => {
     if (value === null || value === undefined || value === '') return ''
     const numeric = typeof value === 'number' ? value : parseFloat(value)
@@ -70,12 +61,11 @@ function App() {
   }
 
   const buildDuplicateKey = (invoice) => {
-    const supplierKey = normalizeSupplier(invoice.supplier)
     const dateKey = displayDateToISO(invoice.date)
     const totalKey = normalizeAmount(invoice.total)
 
-    if (!supplierKey || !dateKey || !totalKey) return null
-    return `${supplierKey}|${dateKey}|${totalKey}`
+    if (!dateKey || !totalKey) return null
+    return `${dateKey}|${totalKey}`
   }
 
   const mapInvoiceFromDatabase = (inv) => {
@@ -353,7 +343,7 @@ function App() {
           .sort((a, b) => a.rowNumber - b.rowNumber)
 
         const duplicateSummary = duplicateRows
-          .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.supplier} | ${item.date} | ₪${normalizeAmount(item.total)}`)
+          .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.date} | ₪${normalizeAmount(item.total)}`)
           .join('\n')
 
         throw new Error(
