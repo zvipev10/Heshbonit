@@ -320,16 +320,6 @@ function App() {
     setError(null)
 
     try {
-      const hasStoredRowsWithoutFileData = result.some(
-        (res) => !res.failed && res.isStoredRecord && !res.fileData
-      )
-
-      if (hasStoredRowsWithoutFileData) {
-        throw new Error(
-          'לא ניתן לשמור מחדש נתונים שנטענו מבסיס הנתונים בלי קבצי המקור. יש להעלות מחדש את הקבצים או לעדכן את ה-backend כך שישמרו הקבצים הקיימים בעת save.'
-        )
-      }
-
       const duplicateGroups = new Map()
 
       result.forEach((res, index) => {
@@ -386,6 +376,7 @@ function App() {
       const invoicesToSave = result
         .filter(res => !res.failed)
         .map(res => ({
+          id: res.id || null,
           fileName: res.fileName,
           mimeType: res.mimeType || null,
           fileData: res.fileData || null,
