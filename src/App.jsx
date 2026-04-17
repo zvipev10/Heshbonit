@@ -458,6 +458,17 @@ function App() {
             צלם חשבונית
           </button>
         </div>
+
+        <div className="save-section">
+          <button
+            type="button"
+            onClick={handleSaveToDatabase}
+            className="save-button"
+            disabled={saving}
+          >
+            {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
+          </button>
+        </div>
       </section>
 
       {processing && (
@@ -492,17 +503,6 @@ function App() {
               <span className="summary-label">סה"כ</span>
               <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
             </div>
-          </div>
-
-          <div className="save-section">
-            <button
-              type="button"
-              onClick={handleSaveToDatabase}
-              className="save-button"
-              disabled={saving || result.length === 0}
-            >
-              {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
-            </button>
           </div>
 
           {selectedRows.size > 0 && (
