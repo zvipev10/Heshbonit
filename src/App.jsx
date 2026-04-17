@@ -38,7 +38,7 @@ function App() {
       if (!dateA) return 1
       if (!dateB) return -1
 
-      return dateA - dateB
+      return dateB - dateA
     })
   }
 
@@ -65,11 +65,11 @@ function App() {
       payment: inv.totalWithoutVat,
       vat: inv.vat,
       total: inv.totalWithVat,
-      fileName: inv.fileName
+      fileName: inv.fileName,
+      isStoredRecord: true,
     }
   }
 
-  // Load data from database on mount
   useEffect(() => {
     const loadDataFromDatabase = async () => {
       try {
@@ -89,7 +89,6 @@ function App() {
     loadDataFromDatabase()
   }, [])
 
-  // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       result.forEach((res) => {
@@ -147,6 +146,7 @@ function App() {
           vat,
           total: totalWithVat,
           confidence,
+          isStoredRecord: false,
         }
       })
 
@@ -197,15 +197,15 @@ function App() {
   const handleApplyFraction = (fraction) => {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
-      
+
       const fractions = {
-        '2/3': 2/3,
+        '2/3': 2 / 3,
         '1/2': 0.5,
-        '1/3': 1/3,
-        '1/4': 0.25
+        '1/3': 1 / 3,
+        '1/4': 0.25,
       }
       const multiplier = fractions[fraction] || 1
-      
+
       return {
         ...res,
         payment: res.payment != null ? res.payment * multiplier : null,
@@ -284,10 +284,18 @@ function App() {
     setError(null)
 
     try {
-      // Helper to convert Hebrew date format back to ISO
+      const hasStoredRowsWithoutFileData = result.some(
+        (res) => !res.failed && res.isStoredRecord && !res.fileData
+      )
+
+      if (hasStoredRowsWithoutFileData) {
+        throw new Error(
+          'לא ניתן לשמור מחדש נתונים שנטענו מבסיס הנתונים בלי קבצי המקור. יש להעלות מחדש את הקבצים או לעדכן את ה-backend כך שישמרו הקבצים הקיימים בעת save.'
+        )
+      }
+
       const dateToISO = (hebrewDate) => {
         if (!hebrewDate || hebrewDate === '—') return null
-        // Convert from "16.4.2026" to "2026-04-16"
         const parts = hebrewDate.split('.')
         if (parts.length === 3) {
           const day = parts[0].padStart(2, '0')
@@ -298,24 +306,25 @@ function App() {
         return hebrewDate
       }
 
-      // Prepare data for saving (exclude temporary properties)
-      const invoicesToSave = result.map(res => ({
-        fileName: res.fileName,
-        mimeType: res.mimeType || null,
-        fileData: res.fileData || null,
-        vendorName: res.supplier === '—' ? null : res.supplier,
-        date: dateToISO(res.date),
-        totalWithVat: res.total,
-        totalWithoutVat: res.payment,
-        vat: res.vat,
-        currency: 'ILS',
-        confidence: res.confidence || 'medium'
-      }))
+      const invoicesToSave = result
+        .filter(res => !res.failed)
+        .map(res => ({
+          fileName: res.fileName,
+          mimeType: res.mimeType || null,
+          fileData: res.fileData || null,
+          vendorName: res.supplier === '—' ? null : res.supplier,
+          date: dateToISO(res.date),
+          totalWithVat: res.total,
+          totalWithoutVat: res.payment,
+          vat: res.vat,
+          currency: 'ILS',
+          confidence: res.confidence || 'medium',
+        }))
 
       const response = await fetch(`${API_BASE}/save-batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoices: invoicesToSave })
+        body: JSON.stringify({ invoices: invoicesToSave }),
       })
 
       const json = await response.json()
@@ -324,7 +333,6 @@ function App() {
         throw new Error(json.error || 'Failed to save to database')
       }
 
-      // After successful save, reload data to get proper API file URLs
       const listResponse = await fetch(`${API_BASE}/list`)
       const listJson = await listResponse.json()
 
