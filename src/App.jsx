@@ -459,11 +459,11 @@ function App() {
           </button>
         </div>
 
-        <div className="save-section">
+        <div className="upload-actions">
           <button
             type="button"
             onClick={handleSaveToDatabase}
-            className="save-button"
+            className="upload-button"
             disabled={saving}
           >
             {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
