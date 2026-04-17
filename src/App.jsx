@@ -42,6 +42,42 @@ function App() {
     })
   }
 
+  const normalizeSupplier = (value) => {
+    if (!value || value === '—') return ''
+    return value
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()"']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  const normalizeAmount = (value) => {
+    if (value === null || value === undefined || value === '') return ''
+    const numeric = typeof value === 'number' ? value : parseFloat(value)
+    if (Number.isNaN(numeric)) return ''
+    return numeric.toFixed(2)
+  }
+
+  const displayDateToISO = (value) => {
+    if (!value || value === '—') return ''
+    const parsed = parseDisplayDate(value)
+    if (!parsed) return ''
+
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, '0')
+    const day = String(parsed.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const buildDuplicateKey = (invoice) => {
+    const supplierKey = normalizeSupplier(invoice.supplier)
+    const dateKey = displayDateToISO(invoice.date)
+    const totalKey = normalizeAmount(invoice.total)
+
+    if (!supplierKey || !dateKey || !totalKey) return null
+    return `${supplierKey}|${dateKey}|${totalKey}`
+  }
+
   const mapInvoiceFromDatabase = (inv) => {
     let hebrewDate = '—'
     if (inv.date) {
@@ -291,6 +327,47 @@ function App() {
       if (hasStoredRowsWithoutFileData) {
         throw new Error(
           'לא ניתן לשמור מחדש נתונים שנטענו מבסיס הנתונים בלי קבצי המקור. יש להעלות מחדש את הקבצים או לעדכן את ה-backend כך שישמרו הקבצים הקיימים בעת save.'
+        )
+      }
+
+      const duplicateGroups = new Map()
+
+      result.forEach((res, index) => {
+        if (res.failed) return
+
+        const key = buildDuplicateKey(res)
+        if (!key) return
+
+        if (!duplicateGroups.has(key)) {
+          duplicateGroups.set(key, [])
+        }
+
+        duplicateGroups.get(key).push({
+          index,
+          rowNumber: index + 1,
+          fileName: res.fileName,
+          isStoredRecord: !!res.isStoredRecord,
+          supplier: res.supplier,
+          date: res.date,
+          total: res.total,
+        })
+      })
+
+      const duplicateEntries = Array.from(duplicateGroups.values()).filter(
+        (group) => group.length > 1 && group.some((item) => item.isStoredRecord) && group.some((item) => !item.isStoredRecord)
+      )
+
+      if (duplicateEntries.length > 0) {
+        const duplicateRows = duplicateEntries
+          .flatMap((group) => group.filter((item) => !item.isStoredRecord))
+          .sort((a, b) => a.rowNumber - b.rowNumber)
+
+        const duplicateSummary = duplicateRows
+          .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.supplier} | ${item.date} | ₪${normalizeAmount(item.total)}`)
+          .join('\n')
+
+        throw new Error(
+          `נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`
         )
       }
 
