@@ -63,6 +63,21 @@ function App() {
     return `${dateKey}|${totalKey}`
   }
 
+  const base64ToBlobUrl = (base64, mimeType) => {
+    try {
+      const binary = atob(base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i)
+      }
+      const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' })
+      return URL.createObjectURL(blob)
+    } catch (err) {
+      console.error('Failed to create blob URL from base64:', err)
+      return null
+    }
+  }
+
   const mapInvoiceFromDatabase = (inv) => {
     let hebrewDate = '—'
     if (inv.date) {
@@ -212,7 +227,7 @@ function App() {
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-        const fileUrl = r.fileData ? `data:${r.mimeType};base64,${r.fileData}` : null
+        const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
 
         return {
           failed: false,
@@ -442,7 +457,7 @@ function App() {
       <header className="page-header">
         <div className="header-copy">
           <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה חשבוניות או סנכרן Gmail וצפה בדוח מסכם</p>
+          <p className="header-subtitle">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
