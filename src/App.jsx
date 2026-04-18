@@ -11,8 +11,7 @@ function App() {
   const [error, setError] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
-  const [editingCell, setEditingCell] = useState(null) // {rowIndex, field}
-  const [gmailResults, setGmailResults] = useState([])
+  const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
   const uploadInputRef = useRef(null)
@@ -20,14 +19,12 @@ function App() {
 
   const parseDisplayDate = (value) => {
     if (!value || value === '—') return null
-
     const normalized = value.replace(/[\/.]/g, '-').trim()
     const parts = normalized.split('-')
     if (parts.length !== 3) return null
 
     const [day, month, year] = parts
     const parsed = new Date(Number(year), Number(month) - 1, Number(day))
-
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
 
@@ -67,7 +64,6 @@ function App() {
   const buildDuplicateKey = (invoice) => {
     const dateKey = displayDateToISO(invoice.date)
     const totalKey = normalizeAmount(invoice.total)
-
     if (!dateKey || !totalKey) return null
     return `${dateKey}|${totalKey}`
   }
@@ -83,12 +79,10 @@ function App() {
       }
     }
 
-    const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
-
     return {
       ...inv,
       failed: false,
-      fileUrl,
+      fileUrl: inv.id ? `${API_BASE}/file/${inv.id}` : null,
       supplier: inv.vendorName ?? '—',
       date: hebrewDate,
       payment: inv.totalWithoutVat,
@@ -96,15 +90,44 @@ function App() {
       total: inv.totalWithVat,
       fileName: inv.fileName,
       isStoredRecord: true,
+      isGmail: false,
+      source: 'database',
     }
   }
 
-  const loadGmailResults = async () => {
+  const mapGmailResultToTableRow = (item) => ({
+    id: `gmail-${item.id}`,
+    gmailStagingId: item.id,
+    failed: false,
+    fileName: item.fileName || 'mail.pdf',
+    fileUrl: `${GMAIL_API_BASE}/file/${item.id}`,
+    mimeType: item.mimeType || 'application/octet-stream',
+    supplier: item.fromAddress || '—',
+    date: item.receivedAt ? new Date(item.receivedAt).toLocaleDateString('he-IL') : '—',
+    payment: null,
+    vat: null,
+    total: null,
+    confidence: 'gmail',
+    isStoredRecord: false,
+    isGmail: true,
+    source: 'gmail',
+    gmailMeta: {
+      subject: item.subject || 'ללא נושא',
+      snippet: item.snippet || '',
+      sourceType: item.sourceType || 'attachment',
+    },
+  })
+
+  const loadGmailIntoTable = async () => {
     try {
       const resultsRes = await fetch(`${GMAIL_API_BASE}/results`)
       const resultsJson = await resultsRes.json()
       if (resultsJson.success) {
-        setGmailResults(resultsJson.results || [])
+        const gmailRows = (resultsJson.results || []).map(mapGmailResultToTableRow)
+        setResult(prev => {
+          const nonGmailRows = prev.filter(row => !row.isGmail)
+          return sortResultsByDateDesc([...gmailRows, ...nonGmailRows])
+        })
       }
     } catch (err) {
       console.error('Failed to load Gmail results:', err)
@@ -116,10 +139,12 @@ function App() {
       try {
         const response = await fetch(`${API_BASE}/list`)
         const json = await response.json()
-
         if (json.success && json.invoices) {
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-          setResult(sortResultsByDateDesc(mappedInvoices))
+          setResult(prev => {
+            const gmailRows = prev.filter(row => row.isGmail)
+            return sortResultsByDateDesc([...gmailRows, ...mappedInvoices])
+          })
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -127,7 +152,7 @@ function App() {
     }
 
     loadDataFromDatabase()
-    loadGmailResults()
+    loadGmailIntoTable()
   }, [])
 
   useEffect(() => {
@@ -149,7 +174,6 @@ function App() {
 
     const formData = new FormData()
     selectedFiles.forEach(file => formData.append('invoices', file))
-
     const fileUrls = selectedFiles.map(file => URL.createObjectURL(file))
 
     try {
@@ -171,9 +195,7 @@ function App() {
         }
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
-        const vat = totalWithVat != null && totalWithoutVat != null
-          ? totalWithVat - totalWithoutVat
-          : null
+        const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
         return {
           failed: false,
@@ -188,6 +210,8 @@ function App() {
           total: totalWithVat,
           confidence,
           isStoredRecord: false,
+          isGmail: false,
+          source: 'upload',
         }
       })
 
@@ -212,7 +236,7 @@ function App() {
       }
 
       setGmailSummary(json)
-      await loadGmailResults()
+      await loadGmailIntoTable()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -227,13 +251,11 @@ function App() {
   }
 
   const openUploadPicker = () => {
-    if (processing) return
-    uploadInputRef.current?.click()
+    if (!processing) uploadInputRef.current?.click()
   }
 
   const openCameraPicker = () => {
-    if (processing) return
-    cameraInputRef.current?.click()
+    if (!processing) cameraInputRef.current?.click()
   }
 
   const toggleRow = (index) => {
@@ -251,14 +273,14 @@ function App() {
 
   const handleCopyWithoutVat = () => {
     setResult(prev => prev.map((res, i) => {
-      if (!selectedRows.has(i) || res.failed) return res
+      if (!selectedRows.has(i) || res.failed || res.isGmail) return res
       return { ...res, payment: res.total, vat: 0 }
     }))
   }
 
   const handleApplyFraction = (fraction) => {
     setResult(prev => prev.map((res, i) => {
-      if (!selectedRows.has(i) || res.failed) return res
+      if (!selectedRows.has(i) || res.failed || res.isGmail) return res
 
       const fractions = {
         '2/3': 2 / 3,
@@ -297,6 +319,8 @@ function App() {
   const updateRowValue = (index, field, value) => {
     setResult(prev => {
       const updated = [...prev]
+      if (updated[index].isGmail) return updated
+
       if (field === 'supplier') {
         updated[index].supplier = value === '' ? '—' : value
       } else if (field === 'payment' || field === 'vat' || field === 'total') {
@@ -309,8 +333,11 @@ function App() {
   }
 
   const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
-    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
+    if (result[rowIndex]?.isGmail) {
+      return <span className="editable-cell editable-cell-disabled">{displayValue}</span>
+    }
 
+    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
     if (isEditing) {
       return (
         <input
@@ -320,8 +347,7 @@ function App() {
           onChange={(e) => updateRowValue(rowIndex, field, e.target.value)}
           onBlur={() => setEditingCell(null)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') setEditingCell(null)
-            if (e.key === 'Escape') setEditingCell(null)
+            if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null)
           }}
           className="cell-input"
           placeholder={inputType === 'number' ? '0.00' : ''}
@@ -349,14 +375,11 @@ function App() {
       const duplicateGroups = new Map()
 
       result.forEach((res, index) => {
-        if (res.failed) return
-
+        if (res.failed || res.isGmail) return
         const key = buildDuplicateKey(res)
         if (!key) return
 
-        if (!duplicateGroups.has(key)) {
-          duplicateGroups.set(key, [])
-        }
+        if (!duplicateGroups.has(key)) duplicateGroups.set(key, [])
 
         duplicateGroups.get(key).push({
           index,
@@ -382,9 +405,7 @@ function App() {
           .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.date} | ₪${normalizeAmount(item.total)}`)
           .join('\n')
 
-        throw new Error(
-          `נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`
-        )
+        throw new Error(`נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`)
       }
 
       const dateToISO = (hebrewDate) => {
@@ -400,9 +421,9 @@ function App() {
       }
 
       const invoicesToSave = result
-        .filter(res => !res.failed)
+        .filter(res => !res.failed && !res.isGmail)
         .map(res => ({
-          id: res.id || null,
+          id: typeof res.id === 'number' ? res.id : null,
           fileName: res.fileName,
           mimeType: res.mimeType || null,
           fileData: res.fileData || null,
@@ -422,17 +443,18 @@ function App() {
       })
 
       const json = await response.json()
-
       if (!response.ok || !json.success) {
         throw new Error(json.error || 'Failed to save to database')
       }
 
       const listResponse = await fetch(`${API_BASE}/list`)
       const listJson = await listResponse.json()
-
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateDesc(mappedInvoices))
+        setResult(prev => {
+          const gmailRows = prev.filter(row => row.isGmail)
+          return sortResultsByDateDesc([...gmailRows, ...mappedInvoices])
+        })
       }
 
       setError(null)
@@ -444,14 +466,14 @@ function App() {
     }
   }
 
-  const successResults = result.filter(r => !r.failed)
+  const successResults = result.filter(r => !r.failed && !r.isGmail)
 
   return (
     <div className="container">
       <header className="page-header">
         <div className="header-copy">
           <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה חשבוניות, סנכרן Gmail וצפה בדוח מסכם</p>
+          <p className="header-subtitle">העלה חשבוניות או סנכרן Gmail וצפה בדוח מסכם</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -482,37 +504,26 @@ function App() {
         />
 
         <div className="upload-panel-copy">
-          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לראות מועמדים חדשים</p>
+          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לטעון קבצים מסומנים</p>
         </div>
 
         <div className="upload-actions">
           <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
             {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
           </button>
-
           <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
             צלם חשבונית
           </button>
         </div>
 
         <div className="upload-actions">
-          <button
-            type="button"
-            onClick={handleSaveToDatabase}
-            className="upload-button"
-            disabled={saving}
-          >
+          <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
             {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
           </button>
         </div>
 
         <div className="upload-actions">
-          <button
-            type="button"
-            onClick={handleGmailSync}
-            className="upload-button"
-            disabled={gmailLoading}
-          >
+          <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
             {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
           </button>
         </div>
@@ -538,47 +549,17 @@ function App() {
         </div>
       )}
 
-      {gmailResults.length > 0 && (
-        <section className="results">
-          <div className="results-header">
-            <h2>תוצאות Gmail</h2>
-          </div>
-
-          {gmailSummary && (
-            <div className="gmail-summary">
-              נסרקו {gmailSummary.scannedCount} מיילים | נמצאו {gmailSummary.relevantCount} רלוונטיים
-            </div>
-          )}
-
-          <div className="gmail-results-list">
-            {gmailResults.map((mail) => {
-              const attachments = (() => {
-                try {
-                  return JSON.parse(mail.attachmentNames || '[]')
-                } catch {
-                  return []
-                }
-              })()
-
-              return (
-                <div key={mail.id} className="gmail-card">
-                  <div className="gmail-card-subject">{mail.subject || 'ללא נושא'}</div>
-                  <div className="gmail-card-meta">{mail.fromAddress || 'לא ידוע'} | {mail.receivedAt ? new Date(mail.receivedAt).toLocaleDateString('he-IL') : '—'}</div>
-                  <div className="gmail-card-line">קבצים: {attachments.length > 0 ? attachments.join(', ') : 'אין'}</div>
-                  <div className="gmail-card-line">סיווג: {mail.category || 'other'} | ביטחון: {mail.confidence || 'low'}</div>
-                  <div className="gmail-card-reason">{mail.reason || ''}</div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
       {result.length > 0 && (
         <section className="results">
           <div className="results-header">
             <h2>דוח חשבוניות ({result.length})</h2>
           </div>
+
+          {gmailSummary && (
+            <div className="gmail-summary">
+              נטענו {gmailSummary.count} פריטים מסומנים מ-Gmail
+            </div>
+          )}
 
           <div className="summary-cards">
             <div className="summary-card summary-card-before-vat">
@@ -619,9 +600,7 @@ function App() {
           <table className="results-table">
             <thead>
               <tr>
-                <th>
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-                </th>
+                <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                 <th>#</th>
                 <th>תאריך</th>
                 <th>ספק</th>
@@ -634,40 +613,36 @@ function App() {
             <tbody>
               {result.map((res, i) => res.failed ? (
                 <tr key={i} className="row-failed">
-                  <td>
-                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
-                  </td>
+                  <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
                   <td>{i + 1}</td>
                   <td colSpan={4} className="failed-cell">{res.fileName} — {res.error}</td>
                   <td></td>
                   <td></td>
                 </tr>
               ) : (
-                <tr key={i} className={selectedRows.has(i) ? 'row-selected' : ''}>
-                  <td>
-                    <input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} />
-                  </td>
+                <tr key={res.id || i} className={selectedRows.has(i) ? 'row-selected' : ''}>
+                  <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
                   <td>{i + 1}</td>
                   <td>{renderEditableCell(i, 'date', result[i].date)}</td>
                   <td>
                     <div className="supplier-cell">
-                      {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
-                      {result[i].confidence !== 'high' && (
+                      <div className="supplier-line">
+                        {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
+                        {result[i].isGmail && <span className="gmail-source-badge">Gmail</span>}
+                      </div>
+                      {result[i].isGmail && result[i].gmailMeta?.subject && (
+                        <div className="gmail-inline-meta">{result[i].gmailMeta.subject}</div>
+                      )}
+                      {!result[i].isGmail && result[i].confidence !== 'high' && (
                         <span className={`confidence-badge confidence-${result[i].confidence}`}>
                           {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
                         </span>
                       )}
                     </div>
                   </td>
-                  <td>
-                    {renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}
-                  </td>
-                  <td>
-                    {renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}
-                  </td>
-                  <td>
-                    {renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}
-                  </td>
+                  <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}</td>
+                  <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
+                  <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
                   <td>
                     <div className="row-actions">
                       {result[i].fileUrl && (
