@@ -457,7 +457,7 @@ function App() {
       <header className="page-header">
         <div className="header-copy">
           <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
+          <p className="header-subtitle">העלה תמונה או PDF של חשבונית — או סנכרן Gmail וצפה בדוח מסכם</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -609,7 +609,15 @@ function App() {
                   <td>
                     <div className="row-actions">
                       {result[i].fileUrl && (
-                        <a href={result[i].fileUrl} target="_blank" rel="noreferrer" className="file-link" title={`פתח את ${result[i].fileName}`} aria-label={`פתח את ${result[i].fileName}`}>
+                        <a
+                          href={result[i].fileUrl}
+                          download={result[i].fileName || 'document'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="file-link"
+                          title={`פתח את ${result[i].fileName}`}
+                          aria-label={`פתח את ${result[i].fileName}`}
+                        >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 5h5v5" />
                             <path d="M10 14L19 5" />
