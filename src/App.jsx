@@ -3,6 +3,7 @@ import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/invoices/upload'
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/upload', '') ?? '/api/invoices'
+const GMAIL_API_BASE = import.meta.env.VITE_GMAIL_API_URL ?? '/api/gmail'
 
 function App() {
   const [processing, setProcessing] = useState(false)
@@ -11,6 +12,9 @@ function App() {
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null) // {rowIndex, field}
+  const [gmailResults, setGmailResults] = useState([])
+  const [gmailSummary, setGmailSummary] = useState(null)
+  const [gmailLoading, setGmailLoading] = useState(false)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -80,7 +84,6 @@ function App() {
     }
 
     const fileUrl = inv.id ? `${API_BASE}/file/${inv.id}` : null
-    console.log(`Invoice ${inv.fileName}: id=${inv.id}, fileUrl=${fileUrl}`)
 
     return {
       ...inv,
@@ -96,6 +99,18 @@ function App() {
     }
   }
 
+  const loadGmailResults = async () => {
+    try {
+      const resultsRes = await fetch(`${GMAIL_API_BASE}/results`)
+      const resultsJson = await resultsRes.json()
+      if (resultsJson.success) {
+        setGmailResults(resultsJson.results || [])
+      }
+    } catch (err) {
+      console.error('Failed to load Gmail results:', err)
+    }
+  }
+
   useEffect(() => {
     const loadDataFromDatabase = async () => {
       try {
@@ -103,7 +118,6 @@ function App() {
         const json = await response.json()
 
         if (json.success && json.invoices) {
-          console.log('Loaded invoices from DB:', json.invoices)
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
           setResult(sortResultsByDateDesc(mappedInvoices))
         }
@@ -113,6 +127,7 @@ function App() {
     }
 
     loadDataFromDatabase()
+    loadGmailResults()
   }, [])
 
   useEffect(() => {
@@ -181,6 +196,27 @@ function App() {
       setError(err.message)
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleGmailSync = async () => {
+    setGmailLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${GMAIL_API_BASE}/sync`, { method: 'POST' })
+      const json = await res.json()
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'סנכרון Gmail נכשל')
+      }
+
+      setGmailSummary(json)
+      await loadGmailResults()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGmailLoading(false)
     }
   }
 
@@ -415,7 +451,7 @@ function App() {
       <header className="page-header">
         <div className="header-copy">
           <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה חשבוניות וצפה בדוח מסכם</p>
+          <p className="header-subtitle">העלה חשבוניות, סנכרן Gmail וצפה בדוח מסכם</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -446,7 +482,7 @@ function App() {
         />
 
         <div className="upload-panel-copy">
-          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית — הנתונים יחולצו אוטומטית</p>
+          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לראות מועמדים חדשים</p>
         </div>
 
         <div className="upload-actions">
@@ -454,7 +490,7 @@ function App() {
             {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
           </button>
 
-          <button type="button" onClick={openCameraPicker} className="file-label" disabled={processing}>
+          <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
             צלם חשבונית
           </button>
         </div>
@@ -469,6 +505,17 @@ function App() {
             {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
           </button>
         </div>
+
+        <div className="upload-actions">
+          <button
+            type="button"
+            onClick={handleGmailSync}
+            className="upload-button"
+            disabled={gmailLoading}
+          >
+            {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
+          </button>
+        </div>
       </section>
 
       {processing && (
@@ -478,10 +525,53 @@ function App() {
         </div>
       )}
 
+      {gmailLoading && (
+        <div className="processing">
+          <div className="spinner"></div>
+          <p>מסנכרן Gmail...</p>
+        </div>
+      )}
+
       {error && (
         <div className="error-banner">
           <p>{error}</p>
         </div>
+      )}
+
+      {gmailResults.length > 0 && (
+        <section className="results">
+          <div className="results-header">
+            <h2>תוצאות Gmail</h2>
+          </div>
+
+          {gmailSummary && (
+            <div className="gmail-summary">
+              נסרקו {gmailSummary.scannedCount} מיילים | נמצאו {gmailSummary.relevantCount} רלוונטיים
+            </div>
+          )}
+
+          <div className="gmail-results-list">
+            {gmailResults.map((mail) => {
+              const attachments = (() => {
+                try {
+                  return JSON.parse(mail.attachmentNames || '[]')
+                } catch {
+                  return []
+                }
+              })()
+
+              return (
+                <div key={mail.id} className="gmail-card">
+                  <div className="gmail-card-subject">{mail.subject || 'ללא נושא'}</div>
+                  <div className="gmail-card-meta">{mail.fromAddress || 'לא ידוע'} | {mail.receivedAt ? new Date(mail.receivedAt).toLocaleDateString('he-IL') : '—'}</div>
+                  <div className="gmail-card-line">קבצים: {attachments.length > 0 ? attachments.join(', ') : 'אין'}</div>
+                  <div className="gmail-card-line">סיווג: {mail.category || 'other'} | ביטחון: {mail.confidence || 'low'}</div>
+                  <div className="gmail-card-reason">{mail.reason || ''}</div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       {result.length > 0 && (
