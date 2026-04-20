@@ -17,25 +17,44 @@ function App() {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
-  const parseDisplayDate = (value) => {
-    if (!value || value === '—') return null
+  const formatIsoDateToDisplay = (isoDate) => {
+    if (!isoDate) return '—'
+    try {
+      return new Date(isoDate).toLocaleDateString('he-IL')
+    } catch {
+      return '—'
+    }
+  }
+
+  const parseDisplayDateToIso = (value) => {
+    if (!value || value === '—') return ''
     const normalized = value.replace(/[\/.]/g, '-').trim()
     const parts = normalized.split('-')
-    if (parts.length !== 3) return null
+    if (parts.length !== 3) return ''
     const [day, month, year] = parts
     const parsed = new Date(Number(year), Number(month) - 1, Number(day))
-    return Number.isNaN(parsed.getTime()) ? null : parsed
+    if (Number.isNaN(parsed.getTime())) return ''
+    const parsedYear = parsed.getFullYear()
+    const parsedMonth = String(parsed.getMonth() + 1).padStart(2, '0')
+    const parsedDay = String(parsed.getDate()).padStart(2, '0')
+    return `${parsedYear}-${parsedMonth}-${parsedDay}`
+  }
+
+  const normalizeDateIso = (value) => {
+    if (!value) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    return parseDisplayDateToIso(value)
   }
 
   const sortResultsByDateDesc = (items) => {
     return [...items].sort((a, b) => {
       if (a.failed) return 1
       if (b.failed) return -1
-      const dateA = parseDisplayDate(a.date)
-      const dateB = parseDisplayDate(b.date)
+      const dateA = normalizeDateIso(a.dateIso || a.date)
+      const dateB = normalizeDateIso(b.dateIso || b.date)
       if (!dateA) return 1
       if (!dateB) return -1
-      return dateB - dateA
+      return dateB.localeCompare(dateA)
     })
   }
 
@@ -46,18 +65,8 @@ function App() {
     return numeric.toFixed(2)
   }
 
-  const displayDateToISO = (value) => {
-    if (!value || value === '—') return ''
-    const parsed = parseDisplayDate(value)
-    if (!parsed) return ''
-    const year = parsed.getFullYear()
-    const month = String(parsed.getMonth() + 1).padStart(2, '0')
-    const day = String(parsed.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
   const buildDuplicateKey = (invoice) => {
-    const dateKey = displayDateToISO(invoice.date)
+    const dateKey = normalizeDateIso(invoice.dateIso || invoice.date)
     const totalKey = normalizeAmount(invoice.total)
     if (!dateKey || !totalKey) return null
     return `${dateKey}|${totalKey}`
@@ -79,22 +88,15 @@ function App() {
   }
 
   const mapInvoiceFromDatabase = (inv) => {
-    let hebrewDate = '—'
-    if (inv.date) {
-      try {
-        const [year, month, day] = inv.date.split('-')
-        hebrewDate = new Date(year, parseInt(month, 10) - 1, day).toLocaleDateString('he-IL')
-      } catch {
-        hebrewDate = '—'
-      }
-    }
+    const dateIso = inv.date || ''
 
     return {
       ...inv,
       failed: false,
       fileUrl: inv.id ? `${API_BASE}/file/${inv.id}` : null,
       supplier: inv.vendorName ?? '—',
-      date: hebrewDate,
+      date: formatIsoDateToDisplay(dateIso),
+      dateIso,
       payment: inv.totalWithoutVat,
       vat: inv.vat,
       total: inv.totalWithVat,
@@ -171,6 +173,7 @@ function App() {
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
+        const dateIso = date || ''
 
         return {
           failed: false,
@@ -179,7 +182,8 @@ function App() {
           fileData: r.fileData,
           mimeType: r.mimeType,
           supplier: vendorName ?? '—',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+          date: formatIsoDateToDisplay(dateIso),
+          dateIso,
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
@@ -228,6 +232,7 @@ function App() {
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
         const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
+        const dateIso = date || ''
 
         return {
           failed: false,
@@ -236,7 +241,8 @@ function App() {
           fileData: r.fileData,
           mimeType: r.mimeType,
           supplier: vendorName ?? '—',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+          date: formatIsoDateToDisplay(dateIso),
+          dateIso,
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
@@ -328,6 +334,7 @@ function App() {
         updated[index][field] = value === '' || value === null ? null : parseFloat(value)
       } else if (field === 'date') {
         updated[index].date = value
+        updated[index].dateIso = parseDisplayDateToIso(value)
       }
       return updated
     })
@@ -395,18 +402,6 @@ function App() {
         throw new Error(`נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`)
       }
 
-      const dateToISO = (hebrewDate) => {
-        if (!hebrewDate || hebrewDate === '—') return null
-        const parts = hebrewDate.split('.')
-        if (parts.length === 3) {
-          const day = parts[0].padStart(2, '0')
-          const month = parts[1].padStart(2, '0')
-          const year = parts[2]
-          return `${year}-${month}-${day}`
-        }
-        return hebrewDate
-      }
-
       const invoicesToSave = result
         .filter(res => !res.failed)
         .map(res => ({
@@ -415,7 +410,7 @@ function App() {
           mimeType: res.mimeType || null,
           fileData: res.fileData || null,
           vendorName: res.supplier === '—' ? null : res.supplier,
-          date: dateToISO(res.date),
+          date: normalizeDateIso(res.dateIso || res.date) || null,
           totalWithVat: res.total,
           totalWithoutVat: res.payment,
           vat: res.vat,
