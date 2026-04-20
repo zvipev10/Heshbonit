@@ -46,7 +46,7 @@ function App() {
     return parseDisplayDateToIso(value)
   }
 
-  const sortResultsByDateDesc = (items) => {
+  const sortResultsByDateAsc = (items) => {
     return [...items].sort((a, b) => {
       if (a.failed) return 1
       if (b.failed) return -1
@@ -54,7 +54,7 @@ function App() {
       const dateB = normalizeDateIso(b.dateIso || b.date)
       if (!dateA) return 1
       if (!dateB) return -1
-      return dateB.localeCompare(dateA)
+      return dateA.localeCompare(dateB)
     })
   }
 
@@ -113,7 +113,7 @@ function App() {
         const json = await response.json()
         if (json.success && json.invoices) {
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-          setResult(sortResultsByDateDesc(mappedInvoices))
+          setResult(sortResultsByDateAsc(mappedInvoices))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
@@ -193,7 +193,7 @@ function App() {
         }
       })
 
-      setResult(prev => sortResultsByDateDesc([...prev, ...results]))
+      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -252,7 +252,7 @@ function App() {
         }
       })
 
-      setResult(prev => sortResultsByDateDesc([...prev, ...results]))
+      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -433,7 +433,7 @@ function App() {
       const listJson = await listResponse.json()
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateDesc(mappedInvoices))
+        setResult(sortResultsByDateAsc(mappedInvoices))
       }
 
       setError(null)
