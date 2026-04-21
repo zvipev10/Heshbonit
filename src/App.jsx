@@ -14,6 +14,7 @@ function App() {
   const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
+  const [dbLoaded, setDbLoaded] = useState(false)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -115,6 +116,8 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
+      } finally {
+        setDbLoaded(true)
       }
     }
 
@@ -122,13 +125,15 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!dbLoaded) return
+
     const params = new URLSearchParams(window.location.search)
 
     if (params.get('gmail_connected') === '1') {
       window.history.replaceState({}, document.title, window.location.pathname)
       handleGmailSync()
     }
-  }, [])
+  }, [dbLoaded])
 
   useEffect(() => {
     return () => {
