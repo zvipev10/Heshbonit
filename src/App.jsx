@@ -442,7 +442,7 @@ function App() {
       }
 
       setError(null)
-      alert(`בסיס הנתונים עודכן בהצלחה! ${json.savedCount} חשבוניות נשמרו`)
+      alert(`בסיס הנתונים עודכן: ${json.savedCount} נשמרו/עודכנו, ${json.deletedCount || 0} נמחקו`)
     } catch (err) {
       setError(err.message)
     } finally {
