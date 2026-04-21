@@ -341,11 +341,15 @@ function App() {
   const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
     const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
     if (isEditing) {
+      const inputValue = field === 'supplier' && result[rowIndex][field] === '—'
+        ? ''
+        : (result[rowIndex][field] ?? '')
+
       return (
         <input
           autoFocus
           type={inputType}
-          value={result[rowIndex][field] ?? ''}
+          value={inputValue}
           onChange={(e) => updateRowValue(rowIndex, field, e.target.value)}
           onBlur={() => setEditingCell(null)}
           onKeyDown={(e) => {
