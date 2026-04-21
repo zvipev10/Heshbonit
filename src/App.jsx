@@ -99,6 +99,7 @@ function App() {
       payment: inv.totalWithoutVat,
       vat: inv.vat,
       total: inv.totalWithVat,
+      printed: inv.printed || 'לא',
       fileName: inv.fileName,
       isStoredRecord: true,
       source: inv.source || 'database',
@@ -188,6 +189,7 @@ function App() {
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
+          printed: 'לא',
           confidence,
           isStoredRecord: false,
           source: 'upload',
@@ -245,6 +247,7 @@ function App() {
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
+          printed: 'לא',
           confidence,
           isStoredRecord: false,
           source: 'gmail'
@@ -290,6 +293,13 @@ function App() {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
       return { ...res, payment: res.total, vat: 0 }
+    }))
+  }
+
+  const handleMarkPrinted = () => {
+    setResult(prev => prev.map((res, i) => {
+      if (!selectedRows.has(i) || res.failed) return res
+      return { ...res, printed: 'כן' }
     }))
   }
 
@@ -428,6 +438,7 @@ function App() {
           totalWithVat: res.total,
           totalWithoutVat: res.payment,
           vat: res.vat,
+          printed: res.printed || 'לא',
           currency: 'ILS',
           confidence: res.confidence || 'medium',
         }))
@@ -559,6 +570,7 @@ function App() {
             <div className="bulk-actions">
               <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
               <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat">ללא מע"מ</button>
+              <button type="button" onClick={handleMarkPrinted} className="bulk-action-button">מודפס</button>
               <div className="bulk-action-dropdown-wrapper">
                 <select onChange={(e) => e.target.value && handleApplyFraction(e.target.value)} defaultValue="" className="bulk-action-dropdown">
                   <option value="">סכום חלקי</option>
@@ -583,6 +595,7 @@ function App() {
                   <th>לפני מע"מ</th>
                   <th>מע"מ</th>
                   <th>סה"כ</th>
+                  <th>מודפס</th>
                   <th>פעולות</th>
                 </tr>
               </thead>
@@ -591,7 +604,8 @@ function App() {
                   <tr key={i} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
                     <td>{i + 1}</td>
-                    <td colSpan={4} className="failed-cell">{res.fileName} — {res.error}</td>
+                    <td colSpan={5} className="failed-cell">{res.fileName} — {res.error}</td>
+                    <td></td>
                     <td></td>
                     <td></td>
                   </tr>
@@ -616,6 +630,7 @@ function App() {
                     <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}</td>
                     <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
                     <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
+                    <td>{result[i].printed || 'לא'}</td>
                     <td>
                       <div className="row-actions">
                         {result[i].fileUrl && (
