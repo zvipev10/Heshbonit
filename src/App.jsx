@@ -102,6 +102,7 @@ function App() {
       printed: inv.printed || 'לא',
       fileName: inv.fileName,
       isStoredRecord: true,
+      isDirty: false,
       source: inv.source || 'database',
     }
   }
@@ -192,6 +193,7 @@ function App() {
           printed: 'לא',
           confidence,
           isStoredRecord: false,
+          isDirty: true,
           source: 'upload',
         }
       })
@@ -250,6 +252,7 @@ function App() {
           printed: 'לא',
           confidence,
           isStoredRecord: false,
+          isDirty: true,
           source: 'gmail'
         }
       })
@@ -292,14 +295,14 @@ function App() {
   const handleCopyWithoutVat = () => {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
-      return { ...res, payment: res.total, vat: 0 }
+      return { ...res, payment: res.total, vat: 0, isDirty: true }
     }))
   }
 
   const handleMarkPrinted = () => {
     setResult(prev => prev.map((res, i) => {
       if (!selectedRows.has(i) || res.failed) return res
-      return { ...res, printed: 'כן' }
+      return { ...res, printed: 'כן', isDirty: true }
     }))
   }
 
@@ -313,6 +316,7 @@ function App() {
         payment: res.payment != null ? res.payment * multiplier : null,
         vat: res.vat != null ? res.vat * multiplier : null,
         total: res.total != null ? res.total * multiplier : null,
+        isDirty: true,
       }
     }))
   }
@@ -344,6 +348,7 @@ function App() {
       } else if (field === 'date') {
         updated[index].date = value
       }
+      updated[index].isDirty = true
       return updated
     })
   }
@@ -610,7 +615,11 @@ function App() {
                     <td></td>
                   </tr>
                 ) : (
-                  <tr key={res.id || i} className={selectedRows.has(i) ? 'row-selected' : ''}>
+                  <tr
+                    key={res.id || i}
+                    className={selectedRows.has(i) ? 'row-selected' : ''}
+                    style={res.isDirty ? { backgroundColor: '#fef2f2' } : undefined}
+                  >
                     <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
                     <td>{i + 1}</td>
                     <td>{renderEditableCell(i, 'date', result[i].date)}</td>
