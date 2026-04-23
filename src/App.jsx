@@ -437,7 +437,7 @@ function App() {
           id: typeof res.id === 'number' ? res.id : null,
           fileName: res.fileName,
           mimeType: res.mimeType || null,
-          fileData: res.fileData || null,
+          ...(res.isStoredRecord ? {} : { fileData: res.fileData || null }),
           vendorName: res.supplier === '—' ? null : res.supplier,
           date: dateToISO(res.date),
           totalWithVat: res.total,
