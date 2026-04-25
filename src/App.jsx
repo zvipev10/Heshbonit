@@ -17,10 +17,25 @@ function App() {
   const [dbLoaded, setDbLoaded] = useState(false)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+  const blobUrlsRef = useRef(new Set())
+
+  const registerBlobUrl = (url) => {
+    if (url?.startsWith('blob:')) {
+      blobUrlsRef.current.add(url)
+    }
+    return url
+  }
+
+  const revokeBlobUrl = (url) => {
+    if (url?.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+      blobUrlsRef.current.delete(url)
+    }
+  }
 
   const parseDisplayDate = (value) => {
     if (!value || value === '—') return null
-    const normalized = value.replace(/[\/.]/g, '-').trim()
+    const normalized = value.replace(/[/.]/g, '-').trim()
     const parts = normalized.split('-')
     if (parts.length !== 3) return null
     const [day, month, year] = parts
@@ -72,7 +87,7 @@ function App() {
         bytes[i] = binary.charCodeAt(i)
       }
       const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' })
-      return URL.createObjectURL(blob)
+      return registerBlobUrl(URL.createObjectURL(blob))
     } catch (err) {
       console.error('Failed to create blob URL from base64:', err)
       return null
@@ -138,14 +153,15 @@ function App() {
   }, [dbLoaded])
 
   useEffect(() => {
+    const createdBlobUrls = blobUrlsRef.current
+
     return () => {
-      result.forEach((res) => {
-        if (res.fileUrl && res.fileUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(res.fileUrl)
-        }
+      createdBlobUrls.forEach((url) => {
+        URL.revokeObjectURL(url)
       })
+      createdBlobUrls.clear()
     }
-  }, [result])
+  }, [])
 
   const processFiles = async (selectedFiles) => {
     if (!selectedFiles.length) return
@@ -156,7 +172,7 @@ function App() {
 
     const formData = new FormData()
     selectedFiles.forEach(file => formData.append('invoices', file))
-    const fileUrls = selectedFiles.map(file => URL.createObjectURL(file))
+    const fileUrls = selectedFiles.map(file => registerBlobUrl(URL.createObjectURL(file)))
 
     try {
       const response = await fetch(API_URL, { method: 'POST', body: formData })
@@ -323,17 +339,16 @@ function App() {
 
   const handleDeleteSelected = () => {
     setResult(prev => {
-      const filtered = prev.filter((_, i) => !selectedRows.has(i))
-      filtered.forEach(res => {
-        if (
-          res.fileUrl &&
-          res.fileUrl.startsWith('blob:') &&
-          !prev.find((r, idx) => r.fileUrl === res.fileUrl && !selectedRows.has(idx))
-        ) {
-          URL.revokeObjectURL(res.fileUrl)
+      const removed = prev.filter((_, i) => selectedRows.has(i))
+      const kept = prev.filter((_, i) => !selectedRows.has(i))
+
+      removed.forEach(res => {
+        if (res.fileUrl && !kept.some(row => row.fileUrl === res.fileUrl)) {
+          revokeBlobUrl(res.fileUrl)
         }
       })
-      return filtered
+
+      return kept
     })
     setSelectedRows(new Set())
   }
