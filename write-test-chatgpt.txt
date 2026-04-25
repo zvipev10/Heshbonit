@@ -1,2 +1,0 @@
-GitHub write test from ChatGPT.
-If this file exists, direct repo writes are working in this session.

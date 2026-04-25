@@ -497,7 +497,7 @@ function App() {
       <header className="page-header">
         <div className="header-copy">
           <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
+          <p className="header-subtitle">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -514,7 +514,7 @@ function App() {
         <input ref={cameraInputRef} type="file" onChange={handleFileChange} accept="image/*" capture="environment" id="camera-input" />
 
         <div className="upload-panel-copy">
-          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית — או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
+          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
         </div>
 
         <div className="upload-actions">
