@@ -660,7 +660,6 @@ function App() {
                         {result[i].fileUrl && (
                           <a
                             href={result[i].fileUrl}
-                            download={result[i].fileName || 'document'}
                             target="_blank"
                             rel="noreferrer"
                             className="file-link"
