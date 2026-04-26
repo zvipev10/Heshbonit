@@ -33,6 +33,10 @@ function App() {
     }
   }
 
+  const createLocalRowKey = () => {
+    return `local:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${Math.random().toString(36).slice(2)}`}`
+  }
+
   const parseDisplayDate = (value) => {
     if (!value || value === '—') return null
     const normalized = value.replace(/[/.]/g, '-').trim()
@@ -107,6 +111,7 @@ function App() {
 
     return {
       ...inv,
+      rowKey: inv.id ? `db:${inv.id}` : createLocalRowKey(),
       failed: false,
       fileUrl: inv.id ? `${API_BASE}/file/${inv.id}` : null,
       supplier: inv.vendorName ?? '—',
@@ -185,6 +190,7 @@ function App() {
       const results = json.results.map((r, i) => {
         if (!r.success) {
           return {
+            rowKey: createLocalRowKey(),
             failed: true,
             fileName: r.filename,
             fileUrl: fileUrls[i] ?? null,
@@ -196,6 +202,7 @@ function App() {
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
         return {
+          rowKey: createLocalRowKey(),
           failed: false,
           fileName: r.filename,
           fileUrl: fileUrls[i] ?? null,
@@ -244,6 +251,7 @@ function App() {
       const results = json.results.map((r) => {
         if (!r.success) {
           return {
+            rowKey: createLocalRowKey(),
             failed: true,
             fileName: r.filename,
             error: r.error,
@@ -255,6 +263,7 @@ function App() {
         const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
 
         return {
+          rowKey: createLocalRowKey(),
           failed: false,
           fileName: r.filename,
           fileUrl,
@@ -295,36 +304,36 @@ function App() {
     if (!processing) cameraInputRef.current?.click()
   }
 
-  const toggleRow = (index) => {
+  const toggleRow = (rowKey) => {
     setSelectedRows(prev => {
       const next = new Set(prev)
-      next.has(index) ? next.delete(index) : next.add(index)
+      next.has(rowKey) ? next.delete(rowKey) : next.add(rowKey)
       return next
     })
   }
 
-  const allSelected = result.length > 0 && selectedRows.size === result.length
+  const allSelected = result.length > 0 && result.every(row => selectedRows.has(row.rowKey))
   const toggleAll = () => {
-    setSelectedRows(allSelected ? new Set() : new Set(result.map((_, i) => i)))
+    setSelectedRows(allSelected ? new Set() : new Set(result.map(row => row.rowKey)))
   }
 
   const handleCopyWithoutVat = () => {
-    setResult(prev => prev.map((res, i) => {
-      if (!selectedRows.has(i) || res.failed) return res
+    setResult(prev => prev.map((res) => {
+      if (!selectedRows.has(res.rowKey) || res.failed) return res
       return { ...res, payment: res.total, vat: 0, isDirty: true }
     }))
   }
 
   const handleMarkPrinted = () => {
-    setResult(prev => prev.map((res, i) => {
-      if (!selectedRows.has(i) || res.failed) return res
+    setResult(prev => prev.map((res) => {
+      if (!selectedRows.has(res.rowKey) || res.failed) return res
       return { ...res, printed: 'כן', isDirty: true }
     }))
   }
 
   const handleApplyFraction = (fraction) => {
-    setResult(prev => prev.map((res, i) => {
-      if (!selectedRows.has(i) || res.failed) return res
+    setResult(prev => prev.map((res) => {
+      if (!selectedRows.has(res.rowKey) || res.failed) return res
       const fractions = { '2/3': 2 / 3, '1/2': 0.5, '1/3': 1 / 3, '1/4': 0.25 }
       const multiplier = fractions[fraction] || 1
       return {
@@ -339,8 +348,8 @@ function App() {
 
   const handleDeleteSelected = () => {
     setResult(prev => {
-      const removed = prev.filter((_, i) => selectedRows.has(i))
-      const kept = prev.filter((_, i) => !selectedRows.has(i))
+      const removed = prev.filter(row => selectedRows.has(row.rowKey))
+      const kept = prev.filter(row => !selectedRows.has(row.rowKey))
 
       removed.forEach(res => {
         if (res.fileUrl && !kept.some(row => row.fileUrl === res.fileUrl)) {
@@ -350,6 +359,9 @@ function App() {
 
       return kept
     })
+    if (editingCell?.rowKey && selectedRows.has(editingCell.rowKey)) {
+      setEditingCell(null)
+    }
     setSelectedRows(new Set())
   }
 
@@ -369,11 +381,12 @@ function App() {
   }
 
   const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
-    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field
+    const row = result[rowIndex]
+    const isEditing = editingCell?.rowKey === row?.rowKey && editingCell?.field === field
     if (isEditing) {
-      const inputValue = field === 'supplier' && result[rowIndex][field] === '—'
+      const inputValue = field === 'supplier' && row[field] === '—'
         ? ''
-        : (result[rowIndex][field] ?? '')
+        : (row[field] ?? '')
 
       return (
         <input
@@ -393,7 +406,7 @@ function App() {
     }
 
     return (
-      <span onClick={() => setEditingCell({ rowIndex, field })} className="editable-cell" title="לחץ לעריכה">
+      <span onClick={() => setEditingCell({ rowKey: row.rowKey, field })} className="editable-cell" title="לחץ לעריכה">
         {displayValue}
       </span>
     )
@@ -479,6 +492,8 @@ function App() {
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
         setResult(sortResultsByDateAsc(mappedInvoices))
+        setSelectedRows(new Set())
+        setEditingCell(null)
       }
 
       setError(null)
@@ -621,8 +636,8 @@ function App() {
               </thead>
               <tbody>
                 {result.map((res, i) => res.failed ? (
-                  <tr key={i} className="row-failed">
-                    <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
+                  <tr key={res.rowKey} className="row-failed">
+                    <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
                     <td colSpan={5} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
@@ -631,11 +646,11 @@ function App() {
                   </tr>
                 ) : (
                   <tr
-                    key={res.id || i}
-                    className={selectedRows.has(i) ? 'row-selected' : ''}
+                    key={res.rowKey}
+                    className={selectedRows.has(res.rowKey) ? 'row-selected' : ''}
                     style={res.isDirty ? { backgroundColor: '#fef2f2' } : undefined}
                   >
-                    <td><input type="checkbox" checked={selectedRows.has(i)} onChange={() => toggleRow(i)} /></td>
+                    <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
                     <td>{renderEditableCell(i, 'date', result[i].date)}</td>
                     <td>
