@@ -527,14 +527,14 @@ function App() {
         </div>
 
         <div className="upload-actions">
-          <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
-            {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
+          <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
+            {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
           </button>
         </div>
 
         <div className="upload-actions">
-          <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
-            {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
+          <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
+            {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
           </button>
         </div>
       </section>
