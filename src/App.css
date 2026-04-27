@@ -481,6 +481,17 @@ input[type="file"] {
   box-shadow: 0 4px 12px rgba(249, 112, 102, 0.25);
 }
 
+.bulk-action-morning {
+  border-color: #14b8a6;
+  color: #0f766e;
+}
+
+.bulk-action-morning:hover:not(:disabled) {
+  background: #14b8a6;
+  color: white;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
+}
+
 .bulk-action-dropdown-wrapper {
   display: flex;
 }
@@ -554,6 +565,24 @@ input[type="file"] {
   padding: 2px 8px;
   border-radius: 999px;
   font-weight: 700;
+}
+
+.morning-status-badge {
+  margin-right: 8px;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.morning-status-sent {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.morning-status-failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 @media (max-width: 768px) {

@@ -14,6 +14,7 @@ function App() {
   const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
+  const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
@@ -365,6 +366,49 @@ function App() {
     setSelectedRows(new Set())
   }
 
+  const handleSendToMorning = async () => {
+    const selectedStoredRows = result.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed)
+
+    if (selectedStoredRows.length === 0) {
+      setError('Select saved database rows before sending to Morning')
+      return
+    }
+
+    setMorningSending(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`${API_BASE}/send-to-morning`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds: selectedStoredRows.map(row => row.id) }),
+      })
+      const json = await response.json()
+
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || 'Failed to send invoices to Morning')
+      }
+
+      const statuses = new Map(json.results.map(item => [item.invoiceId, item]))
+      setResult(prev => prev.map(row => {
+        const status = statuses.get(row.id)
+        if (!status) return row
+
+        return {
+          ...row,
+          morningSyncStatus: status.success ? 'sent' : 'failed',
+          morningExpenseId: status.morningExpenseId || row.morningExpenseId || null,
+          morningSyncError: status.error || null,
+        }
+      }))
+      alert(`Morning sync completed: ${json.successCount} sent, ${json.failedCount} failed`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMorningSending(false)
+    }
+  }
+
   const updateRowValue = (index, field, value) => {
     setResult(prev => {
       const updated = [...prev]
@@ -507,6 +551,7 @@ function App() {
 
   const successResults = result.filter(r => !r.failed)
   const hasSelectedRows = selectedRows.size > 0
+  const selectedStoredRowsCount = result.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
 
   return (
     <div className="container">
@@ -606,6 +651,9 @@ function App() {
             <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
             <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
             <button type="button" onClick={handleMarkPrinted} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
+            <button type="button" onClick={handleSendToMorning} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
+              {morningSending ? 'Sending...' : 'Send to Morning'}
+            </button>
             <div className="bulk-action-dropdown-wrapper">
               <select onChange={(e) => e.target.value && handleApplyFraction(e.target.value)} defaultValue="" className="bulk-action-dropdown" disabled={!hasSelectedRows}>
                 <option value="">סכום חלקי</option>
@@ -657,6 +705,8 @@ function App() {
                         <div className="supplier-line">
                           {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
                           {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
+                          {result[i].morningSyncStatus === 'sent' && <span className="morning-status-badge morning-status-sent">Morning</span>}
+                          {result[i].morningSyncStatus === 'failed' && <span className="morning-status-badge morning-status-failed" title={result[i].morningSyncError || 'Morning sync failed'}>Morning failed</span>}
                         </div>
                         {result[i].confidence !== 'high' && (
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>
