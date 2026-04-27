@@ -399,13 +399,19 @@ function App() {
           morningSyncStatus: status.success ? 'sent' : 'failed',
           morningExpenseId: status.morningExpenseId || row.morningExpenseId || null,
           morningSyncError: status.error || null,
+          morningFileSyncStatus: status.morningFileSyncStatus || row.morningFileSyncStatus || null,
+          morningFileSyncError: status.morningFileSyncError || null,
         }
       }))
       const failedResults = json.results.filter(item => !item.success)
+      const fileFailedResults = json.results.filter(item => item.morningFileSyncStatus === 'failed')
       const failureDetails = failedResults.length > 0
         ? `\n${failedResults.slice(0, 3).map(item => `Invoice ${item.invoiceId}: ${item.error}`).join('\n')}`
         : ''
-      alert(`Morning sync completed: ${json.successCount} sent, ${json.failedCount} failed${failureDetails}`)
+      const fileFailureDetails = fileFailedResults.length > 0
+        ? `\nFile upload failed:\n${fileFailedResults.slice(0, 3).map(item => `Invoice ${item.invoiceId}: ${item.morningFileSyncError}`).join('\n')}`
+        : ''
+      alert(`Morning sync completed: ${json.successCount} sent, ${json.failedCount} failed, ${json.fileFailedCount || 0} file uploads failed${failureDetails}${fileFailureDetails}`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -711,6 +717,8 @@ function App() {
                           {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
                           {result[i].morningSyncStatus === 'sent' && <span className="morning-status-badge morning-status-sent">Morning</span>}
                           {result[i].morningSyncStatus === 'failed' && <span className="morning-status-badge morning-status-failed" title={result[i].morningSyncError || 'Morning sync failed'}>Morning failed</span>}
+                          {result[i].morningFileSyncStatus === 'uploaded' && <span className="morning-status-badge morning-file-status-sent">File</span>}
+                          {result[i].morningFileSyncStatus === 'failed' && <span className="morning-status-badge morning-status-failed" title={result[i].morningFileSyncError || 'Morning file upload failed'}>File failed</span>}
                         </div>
                         {result[i].confidence !== 'high' && (
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>

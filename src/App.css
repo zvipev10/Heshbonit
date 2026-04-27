@@ -580,6 +580,11 @@ input[type="file"] {
   color: #0f766e;
 }
 
+.morning-file-status-sent {
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .morning-status-failed {
   background: #fee2e2;
   color: #b91c1c;
