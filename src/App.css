@@ -569,10 +569,16 @@ input[type="file"] {
 
 .morning-table-status {
   margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
   font-size: 0.7rem;
-  padding: 2px 8px;
+  line-height: 1;
+  padding: 5px 8px;
   border-radius: 999px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .morning-table-status-pass {

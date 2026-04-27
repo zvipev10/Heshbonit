@@ -688,13 +688,13 @@ function App() {
                 <tr>
                   <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                   <th>#</th>
-                  <th>מורנינג</th>
                   <th>תאריך</th>
                   <th>ספק</th>
                   <th>לפני מע"מ</th>
                   <th>מע"מ</th>
                   <th>סה"כ</th>
                   <th>מודפס</th>
+                  <th>מורנינג</th>
                   <th>פעולות</th>
                 </tr>
               </thead>
@@ -703,7 +703,6 @@ function App() {
                   <tr key={res.rowKey} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
-                    <td></td>
                     <td colSpan={5} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
                     <td></td>
@@ -717,11 +716,6 @@ function App() {
                   >
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
-                    <td>
-                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
-                        {getMorningStatus(result[i])}
-                      </span>
-                    </td>
                     <td>{renderEditableCell(i, 'date', result[i].date)}</td>
                     <td>
                       <div className="supplier-cell">
@@ -740,6 +734,11 @@ function App() {
                     <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
                     <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
                     <td>{result[i].printed || 'לא'}</td>
+                    <td>
+                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+                        {getMorningStatus(result[i])}
+                      </span>
+                    </td>
                     <td>
                       <div className="row-actions">
                         {result[i].fileUrl && (
