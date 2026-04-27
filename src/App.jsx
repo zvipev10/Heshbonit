@@ -401,7 +401,11 @@ function App() {
           morningSyncError: status.error || null,
         }
       }))
-      alert(`Morning sync completed: ${json.successCount} sent, ${json.failedCount} failed`)
+      const failedResults = json.results.filter(item => !item.success)
+      const failureDetails = failedResults.length > 0
+        ? `\n${failedResults.slice(0, 3).map(item => `Invoice ${item.invoiceId}: ${item.error}`).join('\n')}`
+        : ''
+      alert(`Morning sync completed: ${json.successCount} sent, ${json.failedCount} failed${failureDetails}`)
     } catch (err) {
       setError(err.message)
     } finally {
