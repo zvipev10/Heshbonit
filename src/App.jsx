@@ -77,6 +77,12 @@ function App() {
     return `${year}-${month}-${day}`
   }
 
+  const getMorningStatus = (row) => {
+    if (!row.isStoredRecord) return '—'
+    if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return 'עבר'
+    return 'לא עבר'
+  }
+
   const buildDuplicateKey = (invoice) => {
     const dateKey = displayDateToISO(invoice.date)
     const totalKey = normalizeAmount(invoice.total)
@@ -682,6 +688,7 @@ function App() {
                 <tr>
                   <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                   <th>#</th>
+                  <th>מורנינג</th>
                   <th>תאריך</th>
                   <th>ספק</th>
                   <th>לפני מע"מ</th>
@@ -696,6 +703,7 @@ function App() {
                   <tr key={res.rowKey} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
+                    <td></td>
                     <td colSpan={5} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
                     <td></td>
@@ -709,16 +717,17 @@ function App() {
                   >
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
+                    <td>
+                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+                        {getMorningStatus(result[i])}
+                      </span>
+                    </td>
                     <td>{renderEditableCell(i, 'date', result[i].date)}</td>
                     <td>
                       <div className="supplier-cell">
                         <div className="supplier-line">
                           {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
                           {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
-                          {result[i].morningSyncStatus === 'sent' && <span className="morning-status-badge morning-status-sent">Morning</span>}
-                          {result[i].morningSyncStatus === 'failed' && <span className="morning-status-badge morning-status-failed" title={result[i].morningSyncError || 'Morning sync failed'}>Morning failed</span>}
-                          {result[i].morningFileSyncStatus === 'uploaded' && <span className="morning-status-badge morning-file-status-sent">File</span>}
-                          {result[i].morningFileSyncStatus === 'failed' && <span className="morning-status-badge morning-status-failed" title={result[i].morningFileSyncError || 'Morning file upload failed'}>File failed</span>}
                         </div>
                         {result[i].confidence !== 'high' && (
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>

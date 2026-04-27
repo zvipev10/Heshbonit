@@ -567,7 +567,7 @@ input[type="file"] {
   font-weight: 700;
 }
 
-.morning-status-badge {
+.morning-table-status {
   margin-right: 8px;
   font-size: 0.7rem;
   padding: 2px 8px;
@@ -575,17 +575,12 @@ input[type="file"] {
   font-weight: 700;
 }
 
-.morning-status-sent {
+.morning-table-status-pass {
   background: #ccfbf1;
   color: #0f766e;
 }
 
-.morning-file-status-sent {
-  background: #ecfdf5;
-  color: #047857;
-}
-
-.morning-status-failed {
+.morning-table-status-fail {
   background: #fee2e2;
   color: #b91c1c;
 }
