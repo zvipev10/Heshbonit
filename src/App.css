@@ -450,7 +450,7 @@ input[type="file"] {
   transition: all 0.2s ease;
 }
 
-.bulk-action-button:hover {
+.bulk-action-button:hover:not(:disabled) {
   background: #3b82f6;
   color: white;
   transform: translateY(-1px);
@@ -461,12 +461,21 @@ input[type="file"] {
   transform: translateY(0);
 }
 
+.bulk-action-button:disabled,
+.bulk-action-dropdown:disabled {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .bulk-action-delete {
   border-color: #f97066;
   color: #f97066;
 }
 
-.bulk-action-delete:hover {
+.bulk-action-delete:hover:not(:disabled) {
   background: #f97066;
   color: white;
   box-shadow: 0 4px 12px rgba(249, 112, 102, 0.25);
@@ -494,7 +503,7 @@ input[type="file"] {
   padding-left: 16px;
 }
 
-.bulk-action-dropdown:hover {
+.bulk-action-dropdown:hover:not(:disabled) {
   background-color: #f0f9ff;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
 }
