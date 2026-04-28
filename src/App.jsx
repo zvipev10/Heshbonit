@@ -516,6 +516,9 @@ function App() {
 
   const renderCategorySelect = (rowIndex) => {
     const row = result[rowIndex]
+    const hasCategoryOutsideList = row.morningCategoryId && !morningCategories.some(category => category.id === row.morningCategoryId)
+    const fallbackCategoryLabel = `${row.morningCategoryName || row.morningCategoryId}${row.morningCategoryCode ? ` (${row.morningCategoryCode})` : ''}`
+
     return (
       <select
         value={row.morningCategoryId || ''}
@@ -523,6 +526,9 @@ function App() {
         className="category-select"
       >
         <option value="">בחר קטגוריה</option>
+        {hasCategoryOutsideList && (
+          <option value={row.morningCategoryId}>{fallbackCategoryLabel}</option>
+        )}
         {morningCategories.map(category => (
           <option key={category.id} value={category.id}>
             {getCategoryLabel(category)}

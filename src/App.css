@@ -10,9 +10,10 @@ body {
 }
 
 .container {
-  max-width: 960px;
+  width: 100%;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 28px 24px 40px;
+  padding: 28px clamp(16px, 3vw, 40px) 40px;
   background: transparent;
 }
 
@@ -252,10 +253,13 @@ input[type="file"] {
 
 .table-scroll {
   width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .results-table {
   width: 100%;
+  min-width: 1080px;
   border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
@@ -558,7 +562,7 @@ input[type="file"] {
 }
 
 .category-select {
-  width: 180px;
+  width: 220px;
   max-width: 100%;
   padding: 7px 10px;
   border: 1.5px solid #d7deec;
@@ -652,7 +656,7 @@ input[type="file"] {
   }
 
   .results-table {
-    min-width: 900px;
+    min-width: 1080px;
   }
 
   .results-table th,
