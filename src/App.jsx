@@ -16,6 +16,7 @@ function App() {
   const [gmailLoading, setGmailLoading] = useState(false)
   const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
+  const [morningCategories, setMorningCategories] = useState([])
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const blobUrlsRef = useRef(new Set())
@@ -83,6 +84,11 @@ function App() {
     return 'לא עבר'
   }
 
+  const getCategoryLabel = (category) => {
+    if (!category) return 'בחר קטגוריה'
+    return `${category.name || category.title || category.id}${category.code ? ` (${category.code})` : ''}`
+  }
+
   const buildDuplicateKey = (invoice) => {
     const dateKey = displayDateToISO(invoice.date)
     const totalKey = normalizeAmount(invoice.total)
@@ -131,6 +137,9 @@ function App() {
       isStoredRecord: true,
       isDirty: false,
       source: inv.source || 'database',
+      morningCategoryId: inv.morningCategoryId || null,
+      morningCategoryName: inv.morningCategoryName || null,
+      morningCategoryCode: inv.morningCategoryCode ?? null,
     }
   }
 
@@ -151,6 +160,22 @@ function App() {
     }
 
     loadDataFromDatabase()
+  }, [])
+
+  useEffect(() => {
+    const loadMorningCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/morning/accounting-classifications`)
+        const json = await response.json()
+        if (json.success && Array.isArray(json.options)) {
+          setMorningCategories(json.options)
+        }
+      } catch (err) {
+        console.error('Failed to load Morning categories:', err)
+      }
+    }
+
+    loadMorningCategories()
   }, [])
 
   useEffect(() => {
@@ -205,7 +230,7 @@ function App() {
           }
         }
 
-        const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
+        const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
         return {
@@ -222,6 +247,9 @@ function App() {
           total: totalWithVat,
           printed: 'לא',
           confidence,
+          morningCategoryId: morningCategoryId || null,
+          morningCategoryName: morningCategoryName || null,
+          morningCategoryCode: morningCategoryCode ?? null,
           isStoredRecord: false,
           isDirty: true,
           source: 'upload',
@@ -265,7 +293,7 @@ function App() {
           }
         }
 
-        const { vendorName, date, totalWithVat, totalWithoutVat, confidence } = r.data
+        const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
         const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
 
@@ -283,6 +311,9 @@ function App() {
           total: totalWithVat,
           printed: 'לא',
           confidence,
+          morningCategoryId: morningCategoryId || null,
+          morningCategoryName: morningCategoryName || null,
+          morningCategoryCode: morningCategoryCode ?? null,
           isStoredRecord: false,
           isDirty: true,
           source: 'gmail'
@@ -380,6 +411,12 @@ function App() {
       return
     }
 
+    const rowsMissingCategory = selectedStoredRows.filter(row => !row.morningCategoryId)
+    if (rowsMissingCategory.length > 0) {
+      setError('בחר קטגוריית Morning לכל החשבוניות המסומנות לפני השליחה')
+      return
+    }
+
     setMorningSending(true)
     setError(null)
 
@@ -430,6 +467,11 @@ function App() {
       const updated = [...prev]
       if (field === 'supplier') {
         updated[index].supplier = value === '' ? '—' : value
+      } else if (field === 'morningCategoryId') {
+        const selected = morningCategories.find(category => category.id === value)
+        updated[index].morningCategoryId = selected?.id || null
+        updated[index].morningCategoryName = selected?.name || selected?.title || null
+        updated[index].morningCategoryCode = selected?.code ?? null
       } else if (field === 'payment' || field === 'vat' || field === 'total') {
         updated[index][field] = value === '' || value === null ? null : parseFloat(value)
       } else if (field === 'date') {
@@ -469,6 +511,24 @@ function App() {
       <span onClick={() => setEditingCell({ rowKey: row.rowKey, field })} className="editable-cell" title="לחץ לעריכה">
         {displayValue}
       </span>
+    )
+  }
+
+  const renderCategorySelect = (rowIndex) => {
+    const row = result[rowIndex]
+    return (
+      <select
+        value={row.morningCategoryId || ''}
+        onChange={(e) => updateRowValue(rowIndex, 'morningCategoryId', e.target.value)}
+        className="category-select"
+      >
+        <option value="">בחר קטגוריה</option>
+        {morningCategories.map(category => (
+          <option key={category.id} value={category.id}>
+            {getCategoryLabel(category)}
+          </option>
+        ))}
+      </select>
     )
   }
 
@@ -532,6 +592,9 @@ function App() {
           totalWithoutVat: res.payment,
           vat: res.vat,
           printed: res.printed || 'לא',
+          morningCategoryId: res.morningCategoryId || null,
+          morningCategoryName: res.morningCategoryName || null,
+          morningCategoryCode: res.morningCategoryCode ?? null,
           currency: 'ILS',
           confidence: res.confidence || 'medium',
         }))
@@ -690,6 +753,7 @@ function App() {
                   <th>#</th>
                   <th>תאריך</th>
                   <th>ספק</th>
+                  <th>קטגוריה</th>
                   <th>לפני מע"מ</th>
                   <th>מע"מ</th>
                   <th>סה"כ</th>
@@ -703,7 +767,7 @@ function App() {
                   <tr key={res.rowKey} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
-                    <td colSpan={5} className="failed-cell">{res.fileName} — {res.error}</td>
+                    <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
                     <td></td>
                     <td></td>
@@ -730,6 +794,7 @@ function App() {
                         )}
                       </div>
                     </td>
+                    <td>{renderCategorySelect(i)}</td>
                     <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}</td>
                     <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
                     <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>

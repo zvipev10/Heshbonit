@@ -557,6 +557,27 @@ input[type="file"] {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.category-select {
+  width: 180px;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid #d7deec;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  direction: rtl;
+  cursor: pointer;
+}
+
+.category-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .gmail-source-badge {
   margin-right: 8px;
   background: #eef2ff;
@@ -631,7 +652,7 @@ input[type="file"] {
   }
 
   .results-table {
-    min-width: 760px;
+    min-width: 900px;
   }
 
   .results-table th,
