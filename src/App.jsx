@@ -98,11 +98,21 @@ function App() {
   const base64ToBlobUrl = (base64, mimeType) => {
     try {
       const binary = atob(base64)
+      let resolvedMimeType = mimeType || 'application/octet-stream'
+      if (!mimeType || mimeType === 'application/octet-stream') {
+        if (binary.startsWith('%PDF-')) {
+          resolvedMimeType = 'application/pdf'
+        } else if (binary.charCodeAt(0) === 0x89 && binary.slice(1, 4) === 'PNG') {
+          resolvedMimeType = 'image/png'
+        } else if (binary.charCodeAt(0) === 0xff && binary.charCodeAt(1) === 0xd8 && binary.charCodeAt(2) === 0xff) {
+          resolvedMimeType = 'image/jpeg'
+        }
+      }
       const bytes = new Uint8Array(binary.length)
       for (let i = 0; i < binary.length; i += 1) {
         bytes[i] = binary.charCodeAt(i)
       }
-      const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' })
+      const blob = new Blob([bytes], { type: resolvedMimeType })
       return registerBlobUrl(URL.createObjectURL(blob))
     } catch (err) {
       console.error('Failed to create blob URL from base64:', err)
