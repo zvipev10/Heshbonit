@@ -85,17 +85,7 @@ function App() {
   }
 
   const getCategoryLabel = (category) => {
-    if (!category) return ''
-    return `${category.name || category.title || ''}${category.code ? ` (${category.code})` : ''}`
-  }
-
-  const findCategoryBySearchValue = (value) => {
-    const normalizedValue = value.trim()
-    return morningCategories.find(category => (
-      getCategoryLabel(category) === normalizedValue ||
-      category.name === normalizedValue ||
-      category.title === normalizedValue
-    ))
+    return category?.name || category?.title || ''
   }
 
   const buildDuplicateKey = (invoice) => {
@@ -527,21 +517,7 @@ function App() {
     const row = result[rowIndex]
     const isEditing = editingCell?.rowKey === row?.rowKey && editingCell?.field === 'morningCategoryId'
     const hasCategoryOutsideList = row.morningCategoryId && !morningCategories.some(category => category.id === row.morningCategoryId)
-    const fallbackCategoryLabel = `${row.morningCategoryName || ''}${row.morningCategoryCode ? ` (${row.morningCategoryCode})` : ''}`
-    const optionListId = `morning-category-options-${row.rowKey}`
-
-    const commitCategorySearchValue = (value) => {
-      if (value.trim() === '') {
-        updateRowValue(rowIndex, 'morningCategoryId', '')
-        return true
-      }
-
-      const selected = findCategoryBySearchValue(value)
-      if (!selected) return false
-
-      updateRowValue(rowIndex, 'morningCategoryId', selected.id)
-      return true
-    }
+    const fallbackCategoryLabel = row.morningCategoryName || ''
 
     if (!isEditing) {
       return (
@@ -556,41 +532,28 @@ function App() {
     }
 
     return (
-      <>
-        <input
+      <select
           autoFocus
-          list={optionListId}
-          defaultValue={row.morningCategoryName || ''}
+          value={row.morningCategoryId || ''}
           onChange={(e) => {
-            if (commitCategorySearchValue(e.target.value)) {
-              setEditingCell(null)
-            }
-          }}
-          onBlur={(e) => {
-            commitCategorySearchValue(e.target.value)
+            updateRowValue(rowIndex, 'morningCategoryId', e.target.value)
             setEditingCell(null)
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              commitCategorySearchValue(e.currentTarget.value)
-              setEditingCell(null)
-            }
-            if (e.key === 'Escape') {
-              setEditingCell(null)
-            }
-          }}
-          className="category-search-input"
-          placeholder="חפש קטגוריה"
-        />
-        <datalist id={optionListId}>
+          onBlur={() => setEditingCell(null)}
+          className="category-select"
+        >
+          {!row.morningCategoryId && <option value="" disabled hidden />}
           {hasCategoryOutsideList && fallbackCategoryLabel && (
-            <option value={fallbackCategoryLabel} />
+            <option value={row.morningCategoryId}>{fallbackCategoryLabel}</option>
           )}
-          {morningCategories.map(category => (
-            <option key={category.id} value={getCategoryLabel(category)} />
-          ))}
-        </datalist>
-      </>
+          {morningCategories
+            .filter(category => getCategoryLabel(category))
+            .map(category => (
+              <option key={category.id} value={category.id}>
+                {getCategoryLabel(category)}
+              </option>
+            ))}
+        </select>
     )
   }
 
