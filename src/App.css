@@ -435,8 +435,10 @@ input[type="file"] {
 .bulk-actions {
   order: 2;
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: row;
+  justify-content: flex-start;
   align-items: center;
+  direction: rtl;
   gap: 12px;
   padding: 16px 20px;
   background: #f0f9ff;
@@ -449,7 +451,7 @@ input[type="file"] {
   color: #1e40af;
   font-weight: 600;
   font-size: 0.95rem;
-  margin-right: 12px;
+  margin-left: 12px;
 }
 
 .bulk-action-button {
