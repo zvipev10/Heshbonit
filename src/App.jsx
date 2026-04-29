@@ -304,9 +304,7 @@ function App() {
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-        const fileUrl = r.gmailResolution === 'linked_page' && r.gmailSourceUrl
-          ? r.gmailSourceUrl
-          : r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
+        const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null
 
         return {
           rowKey: createLocalRowKey(),
