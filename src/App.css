@@ -561,7 +561,8 @@ input[type="file"] {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.category-select {
+.category-select,
+.category-search-input {
   width: 220px;
   max-width: 100%;
   padding: 7px 10px;
@@ -576,7 +577,12 @@ input[type="file"] {
   cursor: pointer;
 }
 
-.category-select:focus {
+.category-search-input {
+  cursor: text;
+}
+
+.category-select:focus,
+.category-search-input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
