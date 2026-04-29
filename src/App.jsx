@@ -304,7 +304,9 @@ function App() {
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-        const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
+        const fileUrl = r.gmailResolution === 'linked_page' && r.gmailSourceUrl
+          ? r.gmailSourceUrl
+          : r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : null
 
         return {
           rowKey: createLocalRowKey(),
@@ -313,6 +315,8 @@ function App() {
           fileUrl,
           fileData: r.fileData,
           mimeType: r.mimeType,
+          gmailResolution: r.gmailResolution,
+          gmailSourceUrl: r.gmailSourceUrl,
           supplier: vendorName ?? '—',
           date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
           payment: totalWithoutVat,
