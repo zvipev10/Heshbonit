@@ -516,13 +516,31 @@ function App() {
 
   const renderCategorySelect = (rowIndex) => {
     const row = result[rowIndex]
+    const isEditing = editingCell?.rowKey === row?.rowKey && editingCell?.field === 'morningCategoryId'
     const hasCategoryOutsideList = row.morningCategoryId && !morningCategories.some(category => category.id === row.morningCategoryId)
     const fallbackCategoryLabel = `${row.morningCategoryName || row.morningCategoryId}${row.morningCategoryCode ? ` (${row.morningCategoryCode})` : ''}`
 
+    if (!isEditing) {
+      return (
+        <span
+          onClick={() => setEditingCell({ rowKey: row.rowKey, field: 'morningCategoryId' })}
+          className="editable-cell category-display-cell"
+          title="לחץ לעריכה"
+        >
+          {row.morningCategoryName || '—'}
+        </span>
+      )
+    }
+
     return (
       <select
+        autoFocus
         value={row.morningCategoryId || ''}
-        onChange={(e) => updateRowValue(rowIndex, 'morningCategoryId', e.target.value)}
+        onChange={(e) => {
+          updateRowValue(rowIndex, 'morningCategoryId', e.target.value)
+          setEditingCell(null)
+        }}
+        onBlur={() => setEditingCell(null)}
         className="category-select"
       >
         <option value="">בחר קטגוריה</option>

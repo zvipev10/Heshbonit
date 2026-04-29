@@ -582,6 +582,10 @@ input[type="file"] {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.category-display-cell {
+  min-width: 160px;
+}
+
 .gmail-source-badge {
   margin-right: 8px;
   background: #eef2ff;
