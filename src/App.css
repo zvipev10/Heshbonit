@@ -109,6 +109,10 @@ input[type="file"] {
   margin-top: 12px;
 }
 
+.upload-actions-primary {
+  flex-wrap: nowrap;
+}
+
 .upload-button {
   display: inline-flex;
   align-items: center;
@@ -164,6 +168,8 @@ input[type="file"] {
 }
 
 .results {
+  display: flex;
+  flex-direction: column;
   margin: 32px auto 0;
   background: #ffffff;
   border-radius: 24px;
@@ -199,10 +205,12 @@ input[type="file"] {
 }
 
 .summary-cards {
+  order: 4;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
+  margin-top: 18px;
+  margin-bottom: 0;
 }
 
 .summary-card {
@@ -252,6 +260,7 @@ input[type="file"] {
 }
 
 .table-scroll {
+  order: 3;
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -424,6 +433,7 @@ input[type="file"] {
 }
 
 .bulk-actions {
+  order: 2;
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
@@ -508,6 +518,8 @@ input[type="file"] {
   color: #3b82f6;
   font-weight: 600;
   font-size: 0.9rem;
+  direction: rtl;
+  text-align: right;
   cursor: pointer;
   transition: all 0.2s ease;
   appearance: none;
@@ -642,6 +654,16 @@ input[type="file"] {
   .summary-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .upload-actions-primary {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .upload-button {
+    width: min(100%, 320px);
+    min-width: 0;
   }
 
   .summary-card {

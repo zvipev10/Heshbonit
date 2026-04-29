@@ -719,22 +719,16 @@ function App() {
           <p className="upload-panel-text">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
         </div>
 
-        <div className="upload-actions">
+        <div className="upload-actions upload-actions-primary">
           <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
             {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
           </button>
           <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
             צלם חשבונית
           </button>
-        </div>
-
-        <div className="upload-actions">
           <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
             {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
           </button>
-        </div>
-
-        <div className="upload-actions">
           <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
             {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
           </button>
