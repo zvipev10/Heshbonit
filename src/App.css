@@ -600,6 +600,28 @@ input[type="file"] {
   min-width: 160px;
 }
 
+.extension-capture-button {
+  padding: 8px 12px;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.extension-capture-button:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.extension-capture-button:disabled {
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .gmail-source-badge {
   margin-right: 8px;
   background: #eef2ff;

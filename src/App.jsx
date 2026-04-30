@@ -14,6 +14,7 @@ function App() {
   const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
+  const [extensionCapturingRows, setExtensionCapturingRows] = useState(new Set())
   const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
   const [morningCategories, setMorningCategories] = useState([])
@@ -299,6 +300,9 @@ function App() {
             failed: true,
             fileName: r.filename,
             error: r.error,
+            source: 'gmail',
+            gmailDebug: r.gmailDebug,
+            gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
           }
         }
 
@@ -336,6 +340,106 @@ function App() {
       setError(err.message)
     } finally {
       setGmailLoading(false)
+    }
+  }
+
+  const requestExtensionCapture = ({ url, fileName }) => {
+    return new Promise((resolve, reject) => {
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${Math.random()}`
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener('message', handleResponse)
+        reject(new Error('Heshbonit browser capture extension did not respond'))
+      }, 120000)
+
+      function handleResponse(event) {
+        if (event.source !== window) return
+        if (event.data?.type !== 'HESHBONIT_CAPTURE_RESPONSE') return
+        if (event.data?.requestId !== requestId) return
+
+        window.clearTimeout(timeout)
+        window.removeEventListener('message', handleResponse)
+
+        const payload = event.data.payload
+        if (!payload?.success) {
+          reject(new Error(payload?.error || 'Browser capture failed'))
+          return
+        }
+
+        resolve(payload)
+      }
+
+      window.addEventListener('message', handleResponse)
+      window.postMessage({
+        type: 'HESHBONIT_CAPTURE_REQUEST',
+        payload: {
+          type: 'CAPTURE_INVOICE_LINK',
+          requestId,
+          url,
+          uploadUrl: new URL(API_URL, window.location.origin).href,
+          fileName: fileName || 'captured-invoice.pdf'
+        }
+      }, '*')
+    })
+  }
+
+  const handleExtensionCapture = async (rowIndex) => {
+    const row = result[rowIndex]
+    const url = row?.gmailSourceUrl || row?.gmailDebug?.selectedLink
+    if (!url) return
+
+    setExtensionCapturingRows(prev => new Set(prev).add(row.rowKey))
+    setError(null)
+
+    try {
+      const capture = await requestExtensionCapture({
+        url,
+        fileName: row.fileName || 'captured-invoice.pdf'
+      })
+      const processedResult = capture.uploadResult?.results?.[0]
+
+      if (!processedResult?.success) {
+        throw new Error(processedResult?.error || 'Captured file extraction failed')
+      }
+
+      const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = processedResult.data
+      const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
+      const fileUrl = processedResult.fileData ? base64ToBlobUrl(processedResult.fileData, processedResult.mimeType) : url
+
+      setResult(prev => {
+        const updated = [...prev]
+        updated[rowIndex] = {
+          rowKey: row.rowKey,
+          failed: false,
+          fileName: processedResult.filename,
+          fileUrl,
+          fileData: processedResult.fileData,
+          mimeType: processedResult.mimeType,
+          gmailResolution: 'extension_capture',
+          gmailSourceUrl: url,
+          supplier: vendorName ?? 'â€”',
+          date: date ? new Date(date).toLocaleDateString('he-IL') : 'â€”',
+          payment: totalWithoutVat,
+          vat,
+          total: totalWithVat,
+          printed: '×œ×',
+          confidence,
+          morningCategoryId: morningCategoryId || null,
+          morningCategoryName: morningCategoryName || null,
+          morningCategoryCode: morningCategoryCode ?? null,
+          isStoredRecord: false,
+          isDirty: true,
+          source: 'gmail'
+        }
+        return sortResultsByDateAsc(updated)
+      })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setExtensionCapturingRows(prev => {
+        const next = new Set(prev)
+        next.delete(row.rowKey)
+        return next
+      })
     }
   }
 
@@ -801,7 +905,18 @@ function App() {
                     <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
                     <td></td>
-                    <td></td>
+                    <td>
+                      {(res.gmailSourceUrl || res.gmailDebug?.selectedLink) && (
+                        <button
+                          type="button"
+                          className="extension-capture-button"
+                          onClick={() => handleExtensionCapture(i)}
+                          disabled={extensionCapturingRows.has(res.rowKey)}
+                        >
+                          {extensionCapturingRows.has(res.rowKey) ? 'Capturing...' : 'Capture'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ) : (
                   <tr
