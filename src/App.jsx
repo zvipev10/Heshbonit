@@ -1,3 +1,4 @@
+﻿/* eslint-disable no-irregular-whitespace */
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
@@ -14,7 +15,6 @@ function App() {
   const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
-  const [extensionCapturingRows, setExtensionCapturingRows] = useState(new Set())
   const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
   const [morningCategories, setMorningCategories] = useState([])
@@ -41,7 +41,7 @@ function App() {
   }
 
   const parseDisplayDate = (value) => {
-    if (!value || value === '—') return null
+    if (!value || value === 'â€”') return null
     const normalized = value.replace(/[/.]/g, '-').trim()
     const parts = normalized.split('-')
     if (parts.length !== 3) return null
@@ -70,7 +70,7 @@ function App() {
   }
 
   const displayDateToISO = (value) => {
-    if (!value || value === '—') return ''
+    if (!value || value === 'â€”') return ''
     const parsed = parseDisplayDate(value)
     if (!parsed) return ''
     const year = parsed.getFullYear()
@@ -80,9 +80,9 @@ function App() {
   }
 
   const getMorningStatus = (row) => {
-    if (!row.isStoredRecord) return '—'
-    if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return 'עבר'
-    return 'לא עבר'
+    if (!row.isStoredRecord) return 'â€”'
+    if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return '×¢×‘×¨'
+    return '×œ× ×¢×‘×¨'
   }
 
   const getCategoryLabel = (category) => {
@@ -122,13 +122,13 @@ function App() {
   }
 
   const mapInvoiceFromDatabase = (inv) => {
-    let hebrewDate = '—'
+    let hebrewDate = 'â€”'
     if (inv.date) {
       try {
         const [year, month, day] = inv.date.split('-')
         hebrewDate = new Date(year, parseInt(month, 10) - 1, day).toLocaleDateString('he-IL')
       } catch {
-        hebrewDate = '—'
+        hebrewDate = 'â€”'
       }
     }
 
@@ -137,12 +137,12 @@ function App() {
       rowKey: inv.id ? `db:${inv.id}` : createLocalRowKey(),
       failed: false,
       fileUrl: inv.id ? `${API_BASE}/file/${inv.id}` : null,
-      supplier: inv.vendorName ?? '—',
+      supplier: inv.vendorName ?? 'â€”',
       date: hebrewDate,
       payment: inv.totalWithoutVat,
       vat: inv.vat,
       total: inv.totalWithVat,
-      printed: inv.printed || 'לא',
+      printed: inv.printed || '×œ×',
       fileName: inv.fileName,
       isStoredRecord: true,
       isDirty: false,
@@ -226,7 +226,7 @@ function App() {
       const json = await response.json()
 
       if (!response.ok || !json.success) {
-        throw new Error(json.error || 'שגיאה בעיבוד החשבוניות')
+        throw new Error(json.error || '×©×’×™××” ×‘×¢×™×‘×•×“ ×”×—×©×‘×•× ×™×•×ª')
       }
 
       const results = json.results.map((r, i) => {
@@ -250,12 +250,12 @@ function App() {
           fileUrl: fileUrls[i] ?? null,
           fileData: r.fileData,
           mimeType: r.mimeType,
-          supplier: vendorName ?? '—',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+          supplier: vendorName ?? 'â€”',
+          date: date ? new Date(date).toLocaleDateString('he-IL') : 'â€”',
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
-          printed: 'לא',
+          printed: '×œ×',
           confidence,
           morningCategoryId: morningCategoryId || null,
           morningCategoryName: morningCategoryName || null,
@@ -274,74 +274,45 @@ function App() {
     }
   }
 
-  const handleGmailSync = async () => {
-    setGmailLoading(true)
-    setError(null)
+  const mapProcessedGmailResult = (r, rowKey = createLocalRowKey(), fallbackSourceUrl = null) => {
+    const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+    const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
+    const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null)
 
-    try {
-      const res = await fetch(`${GMAIL_API_BASE}/sync`, { method: 'POST' })
-      const json = await res.json().catch(() => null)
-
-      if (res.status === 401 || json?.error === 'Gmail not connected') {
-        window.location.href = `${GMAIL_API_BASE}/connect`
-        return
-      }
-
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error || 'סנכרון Gmail נכשל')
-      }
-
-      setGmailSummary({ count: json.total ?? json.results?.length ?? 0 })
-
-      const results = json.results.map((r) => {
-        if (!r.success) {
-          return {
-            rowKey: createLocalRowKey(),
-            failed: true,
-            fileName: r.filename,
-            error: r.error,
-            source: 'gmail',
-            gmailDebug: r.gmailDebug,
-            gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
-          }
-        }
-
-        const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
-        const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-        const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null
-
-        return {
-          rowKey: createLocalRowKey(),
-          failed: false,
-          fileName: r.filename,
-          fileUrl,
-          fileData: r.fileData,
-          mimeType: r.mimeType,
-          gmailResolution: r.gmailResolution,
-          gmailSourceUrl: r.gmailSourceUrl,
-          supplier: vendorName ?? '—',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
-          payment: totalWithoutVat,
-          vat,
-          total: totalWithVat,
-          printed: 'לא',
-          confidence,
-          morningCategoryId: morningCategoryId || null,
-          morningCategoryName: morningCategoryName || null,
-          morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: false,
-          isDirty: true,
-          source: 'gmail'
-        }
-      })
-
-      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setGmailLoading(false)
+    return {
+      rowKey,
+      failed: false,
+      fileName: r.filename,
+      fileUrl,
+      fileData: r.fileData,
+      mimeType: r.mimeType,
+      gmailResolution: r.gmailResolution,
+      gmailSourceUrl: r.gmailSourceUrl || fallbackSourceUrl,
+      supplier: vendorName ?? 'â€”',
+      date: date ? new Date(date).toLocaleDateString('he-IL') : 'â€”',
+      payment: totalWithoutVat,
+      vat,
+      total: totalWithVat,
+      printed: 'לא',
+      confidence,
+      morningCategoryId: morningCategoryId || null,
+      morningCategoryName: morningCategoryName || null,
+      morningCategoryCode: morningCategoryCode ?? null,
+      isStoredRecord: false,
+      isDirty: true,
+      source: 'gmail'
     }
   }
+
+  const mapFailedGmailResult = (r, rowKey = createLocalRowKey(), overrideError = null) => ({
+    rowKey,
+    failed: true,
+    fileName: r.filename,
+    error: overrideError || r.error,
+    source: 'gmail',
+    gmailDebug: r.gmailDebug,
+    gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
+  })
 
   const requestExtensionCapture = ({ url, fileName }) => {
     return new Promise((resolve, reject) => {
@@ -382,64 +353,72 @@ function App() {
     })
   }
 
-  const handleExtensionCapture = async (rowIndex) => {
-    const row = result[rowIndex]
-    const url = row?.gmailSourceUrl || row?.gmailDebug?.selectedLink
-    if (!url) return
+  const captureFailedGmailResult = async (r, rowKey = createLocalRowKey()) => {
+    const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
+    if (!sourceUrl) return mapFailedGmailResult(r, rowKey)
 
-    setExtensionCapturingRows(prev => new Set(prev).add(row.rowKey))
+    const capture = await requestExtensionCapture({
+      url: sourceUrl,
+      fileName: r.filename || 'captured-invoice.pdf'
+    })
+    const processedResult = capture.uploadResult?.results?.[0]
+
+    if (!processedResult?.success) {
+      throw new Error(processedResult?.error || 'Captured file extraction failed')
+    }
+
+    return mapProcessedGmailResult({
+      ...processedResult,
+      gmailResolution: 'extension_capture',
+      gmailSourceUrl: sourceUrl
+    }, rowKey, sourceUrl)
+  }
+
+  const handleGmailSync = async () => {
+    setGmailLoading(true)
     setError(null)
 
     try {
-      const capture = await requestExtensionCapture({
-        url,
-        fileName: row.fileName || 'captured-invoice.pdf'
-      })
-      const processedResult = capture.uploadResult?.results?.[0]
+      const res = await fetch(`${GMAIL_API_BASE}/sync`, { method: 'POST' })
+      const json = await res.json().catch(() => null)
 
-      if (!processedResult?.success) {
-        throw new Error(processedResult?.error || 'Captured file extraction failed')
+      if (res.status === 401 || json?.error === 'Gmail not connected') {
+        window.location.href = `${GMAIL_API_BASE}/connect`
+        return
       }
 
-      const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = processedResult.data
-      const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-      const fileUrl = processedResult.fileData ? base64ToBlobUrl(processedResult.fileData, processedResult.mimeType) : url
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'סנכרון Gmail נכשל')
+      }
 
-      setResult(prev => {
-        const updated = [...prev]
-        updated[rowIndex] = {
-          rowKey: row.rowKey,
-          failed: false,
-          fileName: processedResult.filename,
-          fileUrl,
-          fileData: processedResult.fileData,
-          mimeType: processedResult.mimeType,
-          gmailResolution: 'extension_capture',
-          gmailSourceUrl: url,
-          supplier: vendorName ?? 'â€”',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : 'â€”',
-          payment: totalWithoutVat,
-          vat,
-          total: totalWithVat,
-          printed: '×œ×',
-          confidence,
-          morningCategoryId: morningCategoryId || null,
-          morningCategoryName: morningCategoryName || null,
-          morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: false,
-          isDirty: true,
-          source: 'gmail'
+      setGmailSummary({ count: json.total ?? json.results?.length ?? 0 })
+
+      const results = []
+      for (const r of json.results) {
+        if (r.success) {
+          results.push(mapProcessedGmailResult(r))
+          continue
         }
-        return sortResultsByDateAsc(updated)
-      })
+
+        const rowKey = createLocalRowKey()
+        const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
+        if (!sourceUrl) {
+          results.push(mapFailedGmailResult(r, rowKey))
+          continue
+        }
+
+        try {
+          results.push(await captureFailedGmailResult(r, rowKey))
+        } catch (captureError) {
+          results.push(mapFailedGmailResult(r, rowKey, captureError.message))
+        }
+      }
+
+      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
     } catch (err) {
       setError(err.message)
     } finally {
-      setExtensionCapturingRows(prev => {
-        const next = new Set(prev)
-        next.delete(row.rowKey)
-        return next
-      })
+      setGmailLoading(false)
     }
   }
 
@@ -480,7 +459,7 @@ function App() {
   const handleMarkPrinted = () => {
     setResult(prev => prev.map((res) => {
       if (!selectedRows.has(res.rowKey) || res.failed) return res
-      return { ...res, printed: 'כן', isDirty: true }
+      return { ...res, printed: '×›×Ÿ', isDirty: true }
     }))
   }
 
@@ -528,7 +507,7 @@ function App() {
 
     const rowsMissingCategory = selectedStoredRows.filter(row => !row.morningCategoryId)
     if (rowsMissingCategory.length > 0) {
-      setError('בחר קטגוריית Morning לכל החשבוניות המסומנות לפני השליחה')
+      setError('×‘×—×¨ ×§×˜×’×•×¨×™×™×ª Morning ×œ×›×œ ×”×—×©×‘×•× ×™×•×ª ×”×ž×¡×•×ž× ×•×ª ×œ×¤× ×™ ×”×©×œ×™×—×”')
       return
     }
 
@@ -581,7 +560,7 @@ function App() {
     setResult(prev => {
       const updated = [...prev]
       if (field === 'supplier') {
-        updated[index].supplier = value === '' ? '—' : value
+        updated[index].supplier = value === '' ? 'â€”' : value
       } else if (field === 'morningCategoryId') {
         const selected = morningCategories.find(category => category.id === value)
         updated[index].morningCategoryId = selected?.id || null
@@ -601,7 +580,7 @@ function App() {
     const row = result[rowIndex]
     const isEditing = editingCell?.rowKey === row?.rowKey && editingCell?.field === field
     if (isEditing) {
-      const inputValue = field === 'supplier' && row[field] === '—'
+      const inputValue = field === 'supplier' && row[field] === 'â€”'
         ? ''
         : (row[field] ?? '')
 
@@ -623,7 +602,7 @@ function App() {
     }
 
     return (
-      <span onClick={() => setEditingCell({ rowKey: row.rowKey, field })} className="editable-cell" title="לחץ לעריכה">
+      <span onClick={() => setEditingCell({ rowKey: row.rowKey, field })} className="editable-cell" title="×œ×—×¥ ×œ×¢×¨×™×›×”">
         {displayValue}
       </span>
     )
@@ -640,9 +619,9 @@ function App() {
         <span
           onClick={() => setEditingCell({ rowKey: row.rowKey, field: 'morningCategoryId' })}
           className="editable-cell category-display-cell"
-          title="לחץ לעריכה"
+          title="×œ×—×¥ ×œ×¢×¨×™×›×”"
         >
-          {row.morningCategoryName || '—'}
+          {row.morningCategoryName || 'â€”'}
         </span>
       )
     }
@@ -703,13 +682,13 @@ function App() {
       if (duplicateEntries.length > 0) {
         const duplicateRows = duplicateEntries.flatMap((group) => group.filter((item) => !item.isStoredRecord)).sort((a, b) => a.rowNumber - b.rowNumber)
         const duplicateSummary = duplicateRows
-          .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.date} | ₪${normalizeAmount(item.total)}`)
+          .map((item) => `×©×•×¨×” ${item.rowNumber}: ${item.fileName} | ${item.date} | â‚ª${normalizeAmount(item.total)}`)
           .join('\n')
-        throw new Error(`נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`)
+        throw new Error(`× ×ž×¦××• ${duplicateRows.length} ×—×©×‘×•× ×™×•×ª ×›×¤×•×œ×•×ª ×©×›×‘×¨ ×§×™×™×ž×•×ª ×‘×‘×¡×™×¡ ×”× ×ª×•× ×™×:\n${duplicateSummary}`)
       }
 
       const dateToISO = (hebrewDate) => {
-        if (!hebrewDate || hebrewDate === '—') return null
+        if (!hebrewDate || hebrewDate === 'â€”') return null
         const parts = hebrewDate.split('.')
         if (parts.length === 3) {
           const day = parts[0].padStart(2, '0')
@@ -727,12 +706,12 @@ function App() {
           fileName: res.fileName,
           mimeType: res.mimeType || null,
           ...(res.isStoredRecord ? {} : { fileData: res.fileData || null }),
-          vendorName: res.supplier === '—' ? null : res.supplier,
+          vendorName: res.supplier === 'â€”' ? null : res.supplier,
           date: dateToISO(res.date),
           totalWithVat: res.total,
           totalWithoutVat: res.payment,
           vat: res.vat,
-          printed: res.printed || 'לא',
+          printed: res.printed || '×œ×',
           morningCategoryId: res.morningCategoryId || null,
           morningCategoryName: res.morningCategoryName || null,
           morningCategoryCode: res.morningCategoryCode ?? null,
@@ -761,7 +740,7 @@ function App() {
       }
 
       setError(null)
-      alert(`בסיס הנתונים עודכן: ${json.savedCount} נשמרו/עודכנו, ${json.deletedCount || 0} נמחקו`)
+      alert(`×‘×¡×™×¡ ×”× ×ª×•× ×™× ×¢×•×“×›×Ÿ: ${json.savedCount} × ×©×ž×¨×•/×¢×•×“×›× ×•, ${json.deletedCount || 0} × ×ž×—×§×•`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -777,8 +756,8 @@ function App() {
     <div className="container">
       <header className="page-header">
         <div className="header-copy">
-          <h1>דוח חשבוניות חכם</h1>
-          <p className="header-subtitle">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
+          <h1>×“×•×— ×—×©×‘×•× ×™×•×ª ×—×›×</h1>
+          <p className="header-subtitle">×”×¢×œ×” ×ª×ž×•× ×” ××• PDF ×©×œ ×—×©×‘×•× ×™×ª ××• ×¡× ×›×¨×Ÿ Gmail ×›×“×™ ×œ×˜×¢×•×Ÿ ×—×©×‘×•× ×™×•×ª ×ž×ª×•×™×’×•×ª</p>
         </div>
         <div className="header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -795,21 +774,21 @@ function App() {
         <input ref={cameraInputRef} type="file" onChange={handleFileChange} accept="image/*" capture="environment" id="camera-input" />
 
         <div className="upload-panel-copy">
-          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
+          <p className="upload-panel-text">×”×¢×œ×” ×ª×ž×•× ×” ××• PDF ×©×œ ×—×©×‘×•× ×™×ª ××• ×¡× ×›×¨×Ÿ Gmail ×›×“×™ ×œ×˜×¢×•×Ÿ ×—×©×‘×•× ×™×•×ª ×ž×ª×•×™×’×•×ª</p>
         </div>
 
         <div className="upload-actions upload-actions-primary">
           <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
-            {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
+            {processing ? '×ž×¢×‘×“...' : '×”×¢×œ×” ×§×‘×¦×™× / ×ª×ž×•× ×•×ª'}
           </button>
           <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
-            צלם חשבונית
+            ×¦×œ× ×—×©×‘×•× ×™×ª
           </button>
           <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
-            {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
+            {gmailLoading ? '×ž×¡× ×›×¨×Ÿ...' : '×¡× ×›×¨×Ÿ Gmail'}
           </button>
           <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
-            {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
+            {saving ? '×©×•×ž×¨...' : '×¢×“×›×Ÿ ×‘×¡×™×¡ × ×ª×•× ×™×'}
           </button>
         </div>
       </section>
@@ -817,14 +796,14 @@ function App() {
       {processing && (
         <div className="processing">
           <div className="spinner"></div>
-          <p>מנתח חשבונית...</p>
+          <p>×ž× ×ª×— ×—×©×‘×•× ×™×ª...</p>
         </div>
       )}
 
       {gmailLoading && (
         <div className="processing">
           <div className="spinner"></div>
-          <p>מסנכרן Gmail...</p>
+          <p>×ž×¡× ×›×¨×Ÿ Gmail...</p>
         </div>
       )}
 
@@ -837,47 +816,47 @@ function App() {
       {result.length > 0 && (
         <section className="results">
           <div className="results-header">
-            <h2>דוח חשבוניות ({result.length})</h2>
+            <h2>×“×•×— ×—×©×‘×•× ×™×•×ª ({result.length})</h2>
           </div>
 
           {gmailSummary && (
             <div className="gmail-summary">
-              נטענו {gmailSummary.count} חשבוניות מ-Gmail
+              × ×˜×¢× ×• {gmailSummary.count} ×—×©×‘×•× ×™×•×ª ×ž-Gmail
             </div>
           )}
 
           <div className="summary-cards">
             <div className="summary-card summary-card-before-vat">
-              <span className="summary-label">לפני מע"מ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
+              <span className="summary-label">×œ×¤× ×™ ×ž×¢"×ž</span>
+              <strong>â‚ª{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
             </div>
             <div className="summary-card summary-card-vat">
-              <span className="summary-label">מע"מ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
+              <span className="summary-label">×ž×¢"×ž</span>
+              <strong>â‚ª{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
             </div>
             <div className="summary-card summary-card-total">
-              <span className="summary-label">סה"כ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
+              <span className="summary-label">×¡×”"×›</span>
+              <strong>â‚ª{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
             </div>
           </div>
 
           <div className="bulk-actions">
-            <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
-            <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
-            <button type="button" onClick={handleMarkPrinted} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
+            <span className="bulk-actions-info">×‘×—×¨×ª {selectedRows.size} ×¤×¨×™×˜×™×</span>
+            <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>×œ×œ× ×ž×¢"×ž</button>
+            <button type="button" onClick={handleMarkPrinted} className="bulk-action-button" disabled={!hasSelectedRows}>×ž×•×“×¤×¡</button>
             <button type="button" onClick={handleSendToMorning} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
               {morningSending ? 'Sending...' : 'Send to Morning'}
             </button>
             <div className="bulk-action-dropdown-wrapper">
               <select onChange={(e) => e.target.value && handleApplyFraction(e.target.value)} defaultValue="" className="bulk-action-dropdown" disabled={!hasSelectedRows}>
-                <option value="">סכום חלקי</option>
+                <option value="">×¡×›×•× ×—×œ×§×™</option>
                 <option value="2/3">2/3</option>
                 <option value="1/2">1/2</option>
                 <option value="1/3">1/3</option>
                 <option value="1/4">1/4</option>
               </select>
             </div>
-            <button type="button" onClick={handleDeleteSelected} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows}>מחק</button>
+            <button type="button" onClick={handleDeleteSelected} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows}>×ž×—×§</button>
           </div>
 
           <div className="table-scroll">
@@ -886,15 +865,15 @@ function App() {
                 <tr>
                   <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                   <th>#</th>
-                  <th>תאריך</th>
-                  <th>ספק</th>
-                  <th>קטגוריה</th>
-                  <th>לפני מע"מ</th>
-                  <th>מע"מ</th>
-                  <th>סה"כ</th>
-                  <th>מודפס</th>
-                  <th>מורנינג</th>
-                  <th>פעולות</th>
+                  <th>×ª××¨×™×š</th>
+                  <th>×¡×¤×§</th>
+                  <th>×§×˜×’×•×¨×™×”</th>
+                  <th>×œ×¤× ×™ ×ž×¢"×ž</th>
+                  <th>×ž×¢"×ž</th>
+                  <th>×¡×”"×›</th>
+                  <th>×ž×•×“×¤×¡</th>
+                  <th>×ž×•×¨× ×™× ×’</th>
+                  <th>×¤×¢×•×œ×•×ª</th>
                 </tr>
               </thead>
               <tbody>
@@ -902,21 +881,10 @@ function App() {
                   <tr key={res.rowKey} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
-                    <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
+                    <td colSpan={6} className="failed-cell">{res.fileName} â€” {res.error}</td>
                     <td></td>
                     <td></td>
-                    <td>
-                      {(res.gmailSourceUrl || res.gmailDebug?.selectedLink) && (
-                        <button
-                          type="button"
-                          className="extension-capture-button"
-                          onClick={() => handleExtensionCapture(i)}
-                          disabled={extensionCapturingRows.has(res.rowKey)}
-                        >
-                          {extensionCapturingRows.has(res.rowKey) ? 'Capturing...' : 'Capture'}
-                        </button>
-                      )}
-                    </td>
+                    <td></td>
                   </tr>
                 ) : (
                   <tr
@@ -930,23 +898,23 @@ function App() {
                     <td>
                       <div className="supplier-cell">
                         <div className="supplier-line">
-                          {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
+                          {renderEditableCell(i, 'supplier', result[i].supplier === 'â€”' ? 'â€”' : result[i].supplier)}
                           {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
                         </div>
                         {result[i].confidence !== 'high' && (
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>
-                            {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
+                            {result[i].confidence === 'medium' ? '×‘×™× ×•× ×™' : '× ×ž×•×š'} â€” ×™×© ×œ××ž×ª
                           </span>
                         )}
                       </div>
                     </td>
                     <td>{renderCategorySelect(i)}</td>
-                    <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{result[i].printed || 'לא'}</td>
+                    <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `â‚ª${result[i].payment.toFixed(2)}` : 'â€”', 'number')}</td>
+                    <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `â‚ª${result[i].vat.toFixed(2)}` : 'â€”', 'number')}</td>
+                    <td>{renderEditableCell(i, 'total', result[i].total != null ? `â‚ª${result[i].total.toFixed(2)}` : 'â€”', 'number')}</td>
+                    <td>{result[i].printed || '×œ×'}</td>
                     <td>
-                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+                      <span className={`morning-table-status ${getMorningStatus(result[i]) === '×¢×‘×¨' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
                         {getMorningStatus(result[i])}
                       </span>
                     </td>
@@ -958,8 +926,8 @@ function App() {
                             target="_blank"
                             rel="noreferrer"
                             className="file-link"
-                            title={`פתח את ${result[i].fileName}`}
-                            aria-label={`פתח את ${result[i].fileName}`}
+                            title={`×¤×ª×— ××ª ${result[i].fileName}`}
+                            aria-label={`×¤×ª×— ××ª ${result[i].fileName}`}
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M14 5h5v5" />
@@ -982,3 +950,5 @@ function App() {
 }
 
 export default App
+
+
