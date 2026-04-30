@@ -14,7 +14,6 @@ function App() {
   const [editingCell, setEditingCell] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
-  const [extensionCapturingRows, setExtensionCapturingRows] = useState(new Set())
   const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
   const [morningCategories, setMorningCategories] = useState([])
@@ -293,24 +292,30 @@ function App() {
 
       setGmailSummary({ count: json.total ?? json.results?.length ?? 0 })
 
-      const results = json.results.map((r) => {
+      const results = []
+      for (const r of json.results) {
         if (!r.success) {
-          return {
-            rowKey: createLocalRowKey(),
-            failed: true,
-            fileName: r.filename,
-            error: r.error,
-            source: 'gmail',
-            gmailDebug: r.gmailDebug,
-            gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
+          const rowKey = createLocalRowKey()
+          const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
+
+          if (!sourceUrl) {
+            results.push(mapFailedGmailResult(r, rowKey))
+            continue
           }
+
+          try {
+            results.push(await captureFailedGmailResult(r, rowKey))
+          } catch (captureError) {
+            results.push(mapFailedGmailResult(r, rowKey, captureError.message))
+          }
+          continue
         }
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
         const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null
 
-        return {
+        results.push({
           rowKey: createLocalRowKey(),
           failed: false,
           fileName: r.filename,
@@ -332,8 +337,8 @@ function App() {
           isStoredRecord: false,
           isDirty: true,
           source: 'gmail'
-        }
-      })
+        })
+      }
 
       setResult(prev => sortResultsByDateAsc([...prev, ...results]))
     } catch (err) {
@@ -382,65 +387,65 @@ function App() {
     })
   }
 
-  const handleExtensionCapture = async (rowIndex) => {
-    const row = result[rowIndex]
-    const url = row?.gmailSourceUrl || row?.gmailDebug?.selectedLink
-    if (!url) return
+  const mapProcessedGmailResult = (r, rowKey = createLocalRowKey(), fallbackSourceUrl = null) => {
+    const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+    const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
+    const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null)
 
-    setExtensionCapturingRows(prev => new Set(prev).add(row.rowKey))
-    setError(null)
-
-    try {
-      const capture = await requestExtensionCapture({
-        url,
-        fileName: row.fileName || 'captured-invoice.pdf'
-      })
-      const processedResult = capture.uploadResult?.results?.[0]
-
-      if (!processedResult?.success) {
-        throw new Error(processedResult?.error || 'Captured file extraction failed')
-      }
-
-      const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = processedResult.data
-      const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-      const fileUrl = processedResult.fileData ? base64ToBlobUrl(processedResult.fileData, processedResult.mimeType) : url
-
-      setResult(prev => {
-        const updated = [...prev]
-        updated[rowIndex] = {
-          rowKey: row.rowKey,
-          failed: false,
-          fileName: processedResult.filename,
-          fileUrl,
-          fileData: processedResult.fileData,
-          mimeType: processedResult.mimeType,
-          gmailResolution: 'extension_capture',
-          gmailSourceUrl: url,
-          supplier: vendorName ?? 'â€”',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : 'â€”',
-          payment: totalWithoutVat,
-          vat,
-          total: totalWithVat,
-          printed: '×œ×',
-          confidence,
-          morningCategoryId: morningCategoryId || null,
-          morningCategoryName: morningCategoryName || null,
-          morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: false,
-          isDirty: true,
-          source: 'gmail'
-        }
-        return sortResultsByDateAsc(updated)
-      })
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setExtensionCapturingRows(prev => {
-        const next = new Set(prev)
-        next.delete(row.rowKey)
-        return next
-      })
+    return {
+      rowKey,
+      failed: false,
+      fileName: r.filename,
+      fileUrl,
+      fileData: r.fileData,
+      mimeType: r.mimeType,
+      gmailResolution: r.gmailResolution,
+      gmailSourceUrl: r.gmailSourceUrl || fallbackSourceUrl,
+      supplier: vendorName ?? '—',
+      date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+      payment: totalWithoutVat,
+      vat,
+      total: totalWithVat,
+      printed: 'לא',
+      confidence,
+      morningCategoryId: morningCategoryId || null,
+      morningCategoryName: morningCategoryName || null,
+      morningCategoryCode: morningCategoryCode ?? null,
+      isStoredRecord: false,
+      isDirty: true,
+      source: 'gmail'
     }
+  }
+
+  const mapFailedGmailResult = (r, rowKey = createLocalRowKey(), overrideError = null) => ({
+    rowKey,
+    failed: true,
+    fileName: r.filename,
+    error: overrideError || r.error,
+    source: 'gmail',
+    gmailDebug: r.gmailDebug,
+    gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
+  })
+
+  const captureFailedGmailResult = async (r, rowKey = createLocalRowKey()) => {
+    const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
+    if (!sourceUrl) return mapFailedGmailResult(r, rowKey)
+
+    const capture = await requestExtensionCapture({
+      url: sourceUrl,
+      fileName: r.filename || 'captured-invoice.pdf'
+    })
+    const processedResult = capture.uploadResult?.results?.[0]
+
+    if (!processedResult?.success) {
+      throw new Error(processedResult?.error || 'Captured file extraction failed')
+    }
+
+    return mapProcessedGmailResult({
+      ...processedResult,
+      gmailResolution: 'extension_capture',
+      gmailSourceUrl: sourceUrl
+    }, rowKey, sourceUrl)
   }
 
   const handleFileChange = (e) => {
@@ -905,18 +910,7 @@ function App() {
                     <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
                     <td></td>
                     <td></td>
-                    <td>
-                      {(res.gmailSourceUrl || res.gmailDebug?.selectedLink) && (
-                        <button
-                          type="button"
-                          className="extension-capture-button"
-                          onClick={() => handleExtensionCapture(i)}
-                          disabled={extensionCapturingRows.has(res.rowKey)}
-                        >
-                          {extensionCapturingRows.has(res.rowKey) ? 'Capturing...' : 'Capture'}
-                        </button>
-                      )}
-                    </td>
+                    <td></td>
                   </tr>
                 ) : (
                   <tr
