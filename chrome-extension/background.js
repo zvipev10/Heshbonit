@@ -199,6 +199,76 @@ function waitForTabComplete(tabId, timeoutMs = 45000) {
   });
 }
 
+async function getPageSnapshot(target, tabId) {
+  const tab = await getTab(tabId);
+  const runtimeResult = await sendDebuggerCommand(target, 'Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(() => {
+      const bodyText = document.body ? document.body.innerText || document.body.textContent || '' : '';
+      return {
+        readyState: document.readyState,
+        title: document.title || '',
+        bodyLength: bodyText.trim().length,
+        hasPdfViewer: Boolean(document.querySelector('embed[type="application/pdf"], iframe[src*=".pdf"], pdf-viewer')),
+        hasForm: Boolean(document.querySelector('form')),
+        locationHref: location.href
+      };
+    })()`
+  });
+
+  return {
+    url: tab?.url || runtimeResult.result?.value?.locationHref || '',
+    status: tab?.status || '',
+    ...(runtimeResult.result?.value || {})
+  };
+}
+
+async function waitForPageToSettle(target, tabId, timeoutMs = 90000, stableMs = 10000) {
+  const startedAt = Date.now();
+  let lastSignature = '';
+  let stableSince = Date.now();
+  let latestSnapshot = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await delay(1000);
+
+    let snapshot;
+    try {
+      snapshot = await getPageSnapshot(target, tabId);
+    } catch {
+      stableSince = Date.now();
+      continue;
+    }
+
+    latestSnapshot = snapshot;
+    const signature = [
+      snapshot.url,
+      snapshot.status,
+      snapshot.readyState,
+      snapshot.title,
+      snapshot.bodyLength,
+      snapshot.hasPdfViewer,
+      snapshot.hasForm
+    ].join('|');
+
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      stableSince = Date.now();
+      continue;
+    }
+
+    if (
+      Date.now() - stableSince >= stableMs &&
+      snapshot.status === 'complete' &&
+      snapshot.readyState === 'complete'
+    ) {
+      return snapshot;
+    }
+  }
+
+  return latestSnapshot;
+}
+
 function isFileLikeNetworkResponse(response) {
   const mimeType = (response.mimeType || '').toLowerCase();
   const responseUrl = (response.url || '').toLowerCase();
@@ -326,12 +396,10 @@ async function capturePagePdf(url) {
     await sendDebuggerCommand(target, 'Network.enable');
     await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
 
-    const networkFilePromise = waitForNetworkInvoiceFile(target, 'captured-invoice.pdf', 45000);
-    const tabCompletePromise = waitForTabComplete(tab.id, 45000);
+    const networkFilePromise = waitForNetworkInvoiceFile(target, 'captured-invoice.pdf', 90000);
 
     await sendDebuggerCommand(target, 'Page.navigate', { url });
-    await tabCompletePromise;
-    await delay(7000);
+    await waitForPageToSettle(target, tab.id);
 
     const networkFile = await networkFilePromise;
     if (networkFile) {
