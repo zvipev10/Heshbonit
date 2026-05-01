@@ -74,6 +74,64 @@ function detectMimeType(bytes, contentType) {
   return null;
 }
 
+function decodeHtmlAttribute(value) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function extractAutoSubmitForm(html, baseUrl) {
+  const formMatch = html.match(/<form\b[^>]*>/i);
+  if (!formMatch) return null;
+
+  const formTag = formMatch[0];
+  const actionMatch = formTag.match(/\baction=["']([^"']+)["']/i);
+  const methodMatch = formTag.match(/\bmethod=["']([^"']+)["']/i);
+  const action = actionMatch ? decodeHtmlAttribute(actionMatch[1]) : baseUrl;
+  const method = (methodMatch ? methodMatch[1] : 'GET').toUpperCase();
+  const fields = new URLSearchParams();
+
+  for (const inputMatch of html.matchAll(/<input\b[^>]*>/gi)) {
+    const inputTag = inputMatch[0];
+    const nameMatch = inputTag.match(/\bname=["']([^"']+)["']/i);
+    if (!nameMatch) continue;
+
+    const valueMatch = inputTag.match(/\bvalue=["']([^"']*)["']/i);
+    fields.append(
+      decodeHtmlAttribute(nameMatch[1]),
+      valueMatch ? decodeHtmlAttribute(valueMatch[1]) : ''
+    );
+  }
+
+  return {
+    action: new URL(action, baseUrl).href,
+    method,
+    fields
+  };
+}
+
+async function readDirectFileResponse(response, fallbackName) {
+  if (!response.ok) {
+    throw new Error(`Direct file fetch failed with status ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
+  const mimeType = detectMimeType(bytes, response.headers.get('content-type'));
+
+  if (!mimeType) return null;
+
+  return {
+    finalUrl: response.url,
+    blob: new Blob([arrayBuffer], { type: mimeType }),
+    mimeType,
+    fileName: withExpectedExtension(getFileNameFromUrl(response.url, fallbackName), mimeType)
+  };
+}
+
 function sendDebuggerCommand(target, method, params = {}) {
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(target, method, params, (result) => {
@@ -139,27 +197,49 @@ async function fetchDirectInvoiceFile(url, fallbackName) {
   const response = await fetch(url, {
     credentials: 'include',
     redirect: 'follow',
-    cache: 'no-store'
+    cache: 'no-store',
+    headers: {
+      Accept: 'application/pdf,image/*,text/html,*/*'
+    }
   });
 
-  if (!response.ok) {
-    throw new Error(`Direct file fetch failed with status ${response.status}`);
-  }
+  const directFile = await readDirectFileResponse(response, fallbackName);
+  if (directFile) return directFile;
 
-  const arrayBuffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
-  const mimeType = detectMimeType(bytes, response.headers.get('content-type'));
-
-  if (!mimeType) {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('text/html')) {
     throw new Error('Direct fetch did not return a PDF or image file');
   }
 
-  return {
-    finalUrl: response.url,
-    blob: new Blob([arrayBuffer], { type: mimeType }),
-    mimeType,
-    fileName: withExpectedExtension(getFileNameFromUrl(response.url, fallbackName), mimeType)
-  };
+  const html = await response.text();
+  const autoSubmitForm = extractAutoSubmitForm(html, response.url);
+  if (!autoSubmitForm) {
+    throw new Error('Direct fetch returned HTML without an auto-submit form');
+  }
+
+  const formResponse = await fetch(
+    autoSubmitForm.method === 'GET'
+      ? `${autoSubmitForm.action}${autoSubmitForm.action.includes('?') ? '&' : '?'}${autoSubmitForm.fields.toString()}`
+      : autoSubmitForm.action,
+    {
+      method: autoSubmitForm.method === 'GET' ? 'GET' : 'POST',
+      credentials: 'include',
+      redirect: 'follow',
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/pdf,image/*,*/*',
+        ...(autoSubmitForm.method === 'GET' ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' })
+      },
+      body: autoSubmitForm.method === 'GET' ? undefined : autoSubmitForm.fields
+    }
+  );
+
+  const formFile = await readDirectFileResponse(formResponse, fallbackName);
+  if (!formFile) {
+    throw new Error('Auto-submit form did not return a PDF or image file');
+  }
+
+  return formFile;
 }
 
 async function capturePagePdf(url) {
