@@ -152,6 +152,12 @@ function createTab(url) {
   });
 }
 
+function getTab(tabId) {
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => resolve(tab));
+  });
+}
+
 function removeTab(tabId) {
   return new Promise((resolve) => {
     chrome.tabs.remove(tabId, () => resolve());
@@ -190,6 +196,71 @@ function waitForTabComplete(tabId, timeoutMs = 45000) {
     };
 
     chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+function isFileLikeNetworkResponse(response) {
+  const mimeType = (response.mimeType || '').toLowerCase();
+  const responseUrl = (response.url || '').toLowerCase();
+
+  return (
+    mimeType === 'application/pdf' ||
+    mimeType.startsWith('image/') ||
+    responseUrl.endsWith('.pdf') ||
+    responseUrl.endsWith('.png') ||
+    responseUrl.endsWith('.jpg') ||
+    responseUrl.endsWith('.jpeg') ||
+    responseUrl.endsWith('.webp')
+  );
+}
+
+function waitForNetworkInvoiceFile(target, fallbackName, timeoutMs = 45000) {
+  return new Promise((resolve) => {
+    const candidateResponses = new Map();
+    let done = false;
+
+    const finish = (file) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timeout);
+      chrome.debugger.onEvent.removeListener(listener);
+      resolve(file);
+    };
+
+    const timeout = setTimeout(() => finish(null), timeoutMs);
+
+    const listener = (source, method, params) => {
+      if (source.tabId !== target.tabId) return;
+
+      if (method === 'Network.responseReceived' && isFileLikeNetworkResponse(params.response)) {
+        candidateResponses.set(params.requestId, {
+          url: params.response.url,
+          mimeType: (params.response.mimeType || '').split(';')[0].trim().toLowerCase()
+        });
+      }
+
+      if (method === 'Network.loadingFinished' && candidateResponses.has(params.requestId)) {
+        const candidate = candidateResponses.get(params.requestId);
+        sendDebuggerCommand(target, 'Network.getResponseBody', { requestId: params.requestId })
+          .then((bodyResult) => {
+            const blob = bodyResult.base64Encoded
+              ? base64ToBlob(bodyResult.body, candidate.mimeType || 'application/pdf')
+              : new Blob([bodyResult.body], { type: candidate.mimeType || 'application/pdf' });
+
+            finish({
+              finalUrl: candidate.url,
+              blob,
+              mimeType: candidate.mimeType || 'application/pdf',
+              fileName: withExpectedExtension(getFileNameFromUrl(candidate.url, fallbackName), candidate.mimeType || 'application/pdf')
+            });
+          })
+          .catch(() => {
+            candidateResponses.delete(params.requestId);
+          });
+      }
+    };
+
+    chrome.debugger.onEvent.addListener(listener);
   });
 }
 
@@ -243,19 +314,36 @@ async function fetchDirectInvoiceFile(url, fallbackName) {
 }
 
 async function capturePagePdf(url) {
-  const tab = await createTab(url);
+  const tab = await createTab('about:blank');
   const target = { tabId: tab.id };
   let attached = false;
 
   try {
-    await waitForTabComplete(tab.id, 45000);
-    await delay(4000);
-
     await attachDebugger(target);
     attached = true;
 
     await sendDebuggerCommand(target, 'Page.enable');
+    await sendDebuggerCommand(target, 'Network.enable');
     await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
+
+    const networkFilePromise = waitForNetworkInvoiceFile(target, 'captured-invoice.pdf', 45000);
+    const tabCompletePromise = waitForTabComplete(tab.id, 45000);
+
+    await sendDebuggerCommand(target, 'Page.navigate', { url });
+    await tabCompletePromise;
+    await delay(7000);
+
+    const networkFile = await networkFilePromise;
+    if (networkFile) {
+      const currentTab = await getTab(tab.id);
+      return {
+        tabUrl: currentTab?.url || networkFile.finalUrl,
+        blob: networkFile.blob,
+        mimeType: networkFile.mimeType,
+        fileName: networkFile.fileName,
+        captureMethod: 'browser_network_file'
+      };
+    }
 
     const pdf = await sendDebuggerCommand(target, 'Page.printToPDF', {
       printBackground: true,
@@ -266,10 +354,12 @@ async function capturePagePdf(url) {
       marginLeft: 0.35,
       marginRight: 0.35
     });
+    const currentTab = await getTab(tab.id);
 
     return {
-      tabUrl: tab.url,
-      pdfBase64: pdf.data
+      tabUrl: currentTab?.url || tab.url,
+      pdfBase64: pdf.data,
+      captureMethod: 'page_print'
     };
   } finally {
     if (attached) await detachDebugger(target);
@@ -345,15 +435,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     const captured = await capturePagePdf(message.url);
-    const uploadResult = await uploadCapturedPdf({
-      pdfBase64: captured.pdfBase64,
-      uploadUrl: message.uploadUrl,
-      fileName: message.fileName
-    });
+    const uploadResult = captured.blob
+      ? await uploadCapturedBlob({
+        blob: captured.blob,
+        uploadUrl: message.uploadUrl,
+        fileName: captured.fileName || message.fileName
+      })
+      : await uploadCapturedPdf({
+        pdfBase64: captured.pdfBase64,
+        uploadUrl: message.uploadUrl,
+        fileName: message.fileName
+      });
 
     sendResponse({
       success: true,
-      captureMethod: 'page_print',
+      captureMethod: captured.captureMethod || 'page_print',
       tabUrl: captured.tabUrl,
       uploadResult
     });
