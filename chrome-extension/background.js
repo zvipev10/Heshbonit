@@ -74,6 +74,23 @@ function detectMimeType(bytes, contentType) {
   return null;
 }
 
+function bytesFromBodyResult(bodyResult) {
+  if (bodyResult.base64Encoded) {
+    const binary = atob(bodyResult.body);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  const bytes = new Uint8Array(bodyResult.body.length);
+  for (let i = 0; i < bodyResult.body.length; i += 1) {
+    bytes[i] = bodyResult.body.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+}
+
 function decodeHtmlAttribute(value) {
   return value
     .replace(/&amp;/g, '&')
@@ -272,10 +289,17 @@ async function waitForPageToSettle(target, tabId, timeoutMs = 90000, stableMs = 
 function isFileLikeNetworkResponse(response) {
   const mimeType = (response.mimeType || '').toLowerCase();
   const responseUrl = (response.url || '').toLowerCase();
+  const headers = response.headers || {};
+  const contentDisposition = String(headers['content-disposition'] || headers['Content-Disposition'] || '').toLowerCase();
 
   return (
     mimeType === 'application/pdf' ||
     mimeType.startsWith('image/') ||
+    mimeType === 'application/octet-stream' ||
+    mimeType === 'binary/octet-stream' ||
+    contentDisposition.includes('attachment') ||
+    contentDisposition.includes('filename') ||
+    contentDisposition.includes('.pdf') ||
     responseUrl.endsWith('.pdf') ||
     responseUrl.endsWith('.png') ||
     responseUrl.endsWith('.jpg') ||
@@ -305,7 +329,8 @@ function waitForNetworkInvoiceFile(target, fallbackName, timeoutMs = 45000) {
       if (method === 'Network.responseReceived' && isFileLikeNetworkResponse(params.response)) {
         candidateResponses.set(params.requestId, {
           url: params.response.url,
-          mimeType: (params.response.mimeType || '').split(';')[0].trim().toLowerCase()
+          mimeType: (params.response.mimeType || '').split(';')[0].trim().toLowerCase(),
+          contentType: params.response.headers?.['content-type'] || params.response.headers?.['Content-Type'] || ''
         });
       }
 
@@ -313,15 +338,18 @@ function waitForNetworkInvoiceFile(target, fallbackName, timeoutMs = 45000) {
         const candidate = candidateResponses.get(params.requestId);
         sendDebuggerCommand(target, 'Network.getResponseBody', { requestId: params.requestId })
           .then((bodyResult) => {
-            const blob = bodyResult.base64Encoded
-              ? base64ToBlob(bodyResult.body, candidate.mimeType || 'application/pdf')
-              : new Blob([bodyResult.body], { type: candidate.mimeType || 'application/pdf' });
+            const bytes = bytesFromBodyResult(bodyResult);
+            const detectedMimeType = detectMimeType(bytes, candidate.contentType || candidate.mimeType);
+            if (!detectedMimeType) {
+              candidateResponses.delete(params.requestId);
+              return;
+            }
 
             finish({
               finalUrl: candidate.url,
-              blob,
-              mimeType: candidate.mimeType || 'application/pdf',
-              fileName: withExpectedExtension(getFileNameFromUrl(candidate.url, fallbackName), candidate.mimeType || 'application/pdf')
+              blob: new Blob([bytes], { type: detectedMimeType }),
+              mimeType: detectedMimeType,
+              fileName: withExpectedExtension(getFileNameFromUrl(candidate.url, fallbackName), detectedMimeType)
             });
           })
           .catch(() => {
