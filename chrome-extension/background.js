@@ -266,9 +266,7 @@ function startNetworkDebug(target, debug) {
         fetchDebug.status < 300 &&
         (
           fetchDebug.contentType.toLowerCase().includes('application/pdf') ||
-          fetchDebug.contentType.toLowerCase().startsWith('image/') ||
-          fetchDebug.contentDisposition.toLowerCase().includes('.pdf') ||
-          fetchDebug.contentDisposition.toLowerCase().includes('filename')
+          fetchDebug.contentDisposition.toLowerCase().includes('.pdf')
         );
 
       (async () => {
@@ -282,7 +280,7 @@ function startNetworkDebug(target, debug) {
             fetchDebug.bodySignature = getByteSignature(bytes);
             fetchDebug.detectedMimeType = mimeType;
 
-            if (mimeType) {
+            if (mimeType === 'application/pdf') {
               resolveOnce({
                 finalUrl: fetchDebug.url,
                 blob: new Blob([bytes], { type: mimeType }),
@@ -321,9 +319,8 @@ function startNetworkDebug(target, debug) {
         response.status < 300 &&
         (
           responseDebug.mimeType === 'application/pdf' ||
-          responseDebug.mimeType.startsWith('image/') ||
           responseDebug.contentType.toLowerCase().includes('application/pdf') ||
-          responseDebug.contentType.toLowerCase().startsWith('image/')
+          responseDebug.contentDisposition.toLowerCase().includes('.pdf')
         )
       ) {
         candidateResponses.set(params.requestId, responseDebug);
@@ -348,7 +345,7 @@ function startNetworkDebug(target, debug) {
             candidate.bodySignature = getByteSignature(bytes);
             candidate.detectedMimeType = mimeType;
 
-            if (!mimeType) return;
+            if (mimeType !== 'application/pdf') return;
 
             resolveOnce({
               finalUrl: candidate.url,
