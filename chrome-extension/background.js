@@ -171,6 +171,53 @@ function waitForTabComplete(tabId, timeoutMs = 45000, debug) {
   });
 }
 
+function startNetworkDebug(target, debug) {
+  debug.networkResponses = [];
+  const listener = (source, method, params) => {
+    if (source.tabId !== target.tabId) return;
+
+    if (method === 'Network.responseReceived') {
+      const response = params.response || {};
+      const headers = response.headers || {};
+      debug.networkResponses.push({
+        event: 'responseReceived',
+        requestId: params.requestId,
+        url: response.url || '',
+        status: response.status,
+        mimeType: response.mimeType || '',
+        contentType: headers['content-type'] || headers['Content-Type'] || '',
+        contentDisposition: headers['content-disposition'] || headers['Content-Disposition'] || '',
+        encodedDataLength: response.encodedDataLength || 0
+      });
+    }
+
+    if (method === 'Network.loadingFinished') {
+      const existing = debug.networkResponses.find((item) => item.requestId === params.requestId);
+      if (existing) {
+        existing.loadingFinished = true;
+        existing.encodedDataLength = params.encodedDataLength || existing.encodedDataLength || 0;
+      }
+    }
+
+    if (method === 'Network.loadingFailed') {
+      const existing = debug.networkResponses.find((item) => item.requestId === params.requestId);
+      if (existing) {
+        existing.loadingFailed = true;
+        existing.errorText = params.errorText || '';
+      } else {
+        debug.networkResponses.push({
+          event: 'loadingFailed',
+          requestId: params.requestId,
+          errorText: params.errorText || ''
+        });
+      }
+    }
+  };
+
+  chrome.debugger.onEvent.addListener(listener);
+  return () => chrome.debugger.onEvent.removeListener(listener);
+}
+
 async function fetchDirectInvoiceFile(url, fallbackName, debug) {
   const response = await fetch(url, {
     credentials: 'include',
@@ -214,9 +261,10 @@ async function fetchDirectInvoiceFile(url, fallbackName, debug) {
 }
 
 async function capturePagePdf(url, debug) {
-  const tab = await createTab(url);
+  const tab = await createTab('about:blank');
   const target = { tabId: tab.id };
   let attached = false;
+  let stopNetworkDebug = null;
 
   try {
     debug.pageCapture = {
@@ -229,7 +277,17 @@ async function capturePagePdf(url, debug) {
       }
     };
 
-    const completion = await waitForTabComplete(tab.id, 45000, debug);
+    await attachDebugger(target);
+    attached = true;
+
+    await sendDebuggerCommand(target, 'Page.enable');
+    await sendDebuggerCommand(target, 'Network.enable');
+    await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
+    stopNetworkDebug = startNetworkDebug(target, debug);
+
+    const completionPromise = waitForTabComplete(tab.id, 45000, debug);
+    await sendDebuggerCommand(target, 'Page.navigate', { url });
+    const completion = await completionPromise;
     debug.pageCapture.afterComplete = completion;
     await delay(4000);
     debug.pageCapture.afterDelay = await getTab(tab.id);
@@ -237,12 +295,6 @@ async function capturePagePdf(url, debug) {
       ...(debug.pageCapture || {}),
       tabUrlAfterLoad: tab.url
     };
-
-    await attachDebugger(target);
-    attached = true;
-
-    await sendDebuggerCommand(target, 'Page.enable');
-    await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
 
     const pdf = await sendDebuggerCommand(target, 'Page.printToPDF', {
       printBackground: true,
@@ -265,6 +317,7 @@ async function capturePagePdf(url, debug) {
       pdfBase64: pdf.data
     };
   } finally {
+    if (stopNetworkDebug) stopNetworkDebug();
     if (attached) await detachDebugger(target);
     await removeTab(tab.id);
   }
