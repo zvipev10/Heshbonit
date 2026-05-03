@@ -80,6 +80,46 @@ function detectMimeType(bytes, contentType) {
   return null;
 }
 
+function detectMimeTypeFromBytes(bytes) {
+  if (
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  ) {
+    return 'application/pdf';
+  }
+
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
+
 function bytesFromBodyResult(bodyResult) {
   if (bodyResult.base64Encoded) {
     const binary = atob(bodyResult.body);
@@ -190,6 +230,7 @@ function waitForTabComplete(tabId, timeoutMs = 45000, debug) {
 
 function startNetworkDebug(target, debug) {
   debug.networkResponses = [];
+  debug.fetchResponses = [];
   const candidateResponses = new Map();
   let resolveCapturedFile;
   let capturedFileResolved = false;
@@ -205,6 +246,60 @@ function startNetworkDebug(target, debug) {
 
   const listener = (source, method, params) => {
     if (source.tabId !== target.tabId) return;
+
+    if (method === 'Fetch.requestPaused') {
+      const responseHeaders = params.responseHeaders || [];
+      const headerMap = Object.fromEntries(responseHeaders.map((header) => [header.name.toLowerCase(), header.value]));
+      const fetchDebug = {
+        event: 'requestPaused',
+        requestId: params.requestId,
+        networkId: params.networkId || '',
+        url: params.request?.url || '',
+        status: params.responseStatusCode || null,
+        contentType: headerMap['content-type'] || '',
+        contentDisposition: headerMap['content-disposition'] || ''
+      };
+      debug.fetchResponses.push(fetchDebug);
+
+      const shouldTryBody =
+        fetchDebug.status >= 200 &&
+        fetchDebug.status < 300 &&
+        (
+          fetchDebug.contentType.toLowerCase().includes('application/pdf') ||
+          fetchDebug.contentType.toLowerCase().startsWith('image/') ||
+          fetchDebug.contentDisposition.toLowerCase().includes('.pdf') ||
+          fetchDebug.contentDisposition.toLowerCase().includes('filename')
+        );
+
+      (async () => {
+        try {
+          if (shouldTryBody) {
+            const bodyResult = await sendDebuggerCommand(target, 'Fetch.getResponseBody', { requestId: params.requestId });
+            const bytes = bytesFromBodyResult(bodyResult);
+            const mimeType = detectMimeTypeFromBytes(bytes);
+            fetchDebug.bodyRead = true;
+            fetchDebug.bodyBytes = bytes.length;
+            fetchDebug.bodySignature = getByteSignature(bytes);
+            fetchDebug.detectedMimeType = mimeType;
+
+            if (mimeType) {
+              resolveOnce({
+                finalUrl: fetchDebug.url,
+                blob: new Blob([bytes], { type: mimeType }),
+                mimeType,
+                fileName: withExpectedExtension(getFileNameFromUrl(fetchDebug.url, 'captured-invoice.pdf'), mimeType)
+              });
+            }
+          }
+        } catch (error) {
+          fetchDebug.bodyReadError = error instanceof Error ? error.message : String(error);
+        } finally {
+          await sendDebuggerCommand(target, 'Fetch.continueRequest', { requestId: params.requestId }).catch((error) => {
+            fetchDebug.continueError = error instanceof Error ? error.message : String(error);
+          });
+        }
+      })();
+    }
 
     if (method === 'Network.responseReceived') {
       const response = params.response || {};
@@ -247,7 +342,7 @@ function startNetworkDebug(target, debug) {
         sendDebuggerCommand(target, 'Network.getResponseBody', { requestId: params.requestId })
           .then((bodyResult) => {
             const bytes = bytesFromBodyResult(bodyResult);
-            const mimeType = detectMimeType(bytes, candidate.contentType || candidate.mimeType);
+            const mimeType = detectMimeTypeFromBytes(bytes);
             candidate.bodyRead = true;
             candidate.bodyBytes = bytes.length;
             candidate.bodySignature = getByteSignature(bytes);
@@ -358,6 +453,11 @@ async function capturePagePdf(url, debug) {
 
     await sendDebuggerCommand(target, 'Page.enable');
     await sendDebuggerCommand(target, 'Network.enable');
+    await sendDebuggerCommand(target, 'Fetch.enable', {
+      patterns: [
+        { urlPattern: '*', requestStage: 'Response' }
+      ]
+    });
     await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
     networkDebug = startNetworkDebug(target, debug);
 
@@ -414,6 +514,9 @@ async function capturePagePdf(url, debug) {
     };
   } finally {
     if (networkDebug) networkDebug.stop();
+    if (attached) {
+      await sendDebuggerCommand(target, 'Fetch.disable').catch(() => null);
+    }
     if (attached) await detachDebugger(target);
     await removeTab(tab.id);
   }
