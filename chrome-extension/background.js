@@ -100,6 +100,25 @@ function createTab(url) {
   });
 }
 
+function getTab(tabId) {
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        resolve({ error: error.message });
+        return;
+      }
+      resolve({
+        id: tab.id,
+        url: tab.url || '',
+        pendingUrl: tab.pendingUrl || '',
+        title: tab.title || '',
+        status: tab.status || ''
+      });
+    });
+  });
+}
+
 function removeTab(tabId) {
   return new Promise((resolve) => {
     chrome.tabs.remove(tabId, () => resolve());
@@ -122,18 +141,29 @@ function detachDebugger(target) {
   });
 }
 
-function waitForTabComplete(tabId, timeoutMs = 45000) {
+function waitForTabComplete(tabId, timeoutMs = 45000, debug) {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      resolve(false);
+      resolve({ completed: false, reason: 'timeout' });
     }, timeoutMs);
 
-    const listener = (updatedTabId, changeInfo) => {
+    const listener = async (updatedTabId, changeInfo, updatedTab) => {
+      if (updatedTabId === tabId && debug) {
+        debug.tabUpdates = debug.tabUpdates || [];
+        debug.tabUpdates.push({
+          changeInfo,
+          url: updatedTab?.url || '',
+          pendingUrl: updatedTab?.pendingUrl || '',
+          title: updatedTab?.title || '',
+          status: updatedTab?.status || ''
+        });
+      }
+
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         clearTimeout(timeout);
         chrome.tabs.onUpdated.removeListener(listener);
-        resolve(true);
+        resolve({ completed: true, tab: await getTab(tabId) });
       }
     };
 
@@ -189,9 +219,22 @@ async function capturePagePdf(url, debug) {
   let attached = false;
 
   try {
-    await waitForTabComplete(tab.id, 45000);
-    await delay(4000);
     debug.pageCapture = {
+      initialTab: {
+        id: tab.id,
+        url: tab.url || '',
+        pendingUrl: tab.pendingUrl || '',
+        title: tab.title || '',
+        status: tab.status || ''
+      }
+    };
+
+    const completion = await waitForTabComplete(tab.id, 45000, debug);
+    debug.pageCapture.afterComplete = completion;
+    await delay(4000);
+    debug.pageCapture.afterDelay = await getTab(tab.id);
+    debug.pageCapture = {
+      ...(debug.pageCapture || {}),
       tabUrlAfterLoad: tab.url
     };
 
@@ -213,11 +256,12 @@ async function capturePagePdf(url, debug) {
     debug.pageCapture = {
       ...(debug.pageCapture || {}),
       method: 'page_print',
+      beforeReturn: await getTab(tab.id),
       pdfBytesApprox: Math.floor((pdf.data.length * 3) / 4)
     };
 
     return {
-      tabUrl: tab.url,
+      tabUrl: debug.pageCapture.beforeReturn?.url || tab.url,
       pdfBase64: pdf.data
     };
   } finally {
