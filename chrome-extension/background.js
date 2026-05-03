@@ -100,16 +100,6 @@ function createTab(url) {
   });
 }
 
-function getTab(tabId) {
-  return new Promise((resolve) => {
-    chrome.tabs.get(tabId, (tab) => {
-      const error = chrome.runtime.lastError;
-      if (error) resolve({ error: error.message });
-      else resolve(tab);
-    });
-  });
-}
-
 function removeTab(tabId) {
   return new Promise((resolve) => {
     chrome.tabs.remove(tabId, () => resolve());
@@ -130,40 +120,6 @@ function detachDebugger(target) {
   return new Promise((resolve) => {
     chrome.debugger.detach(target, () => resolve());
   });
-}
-
-async function inspectPageBeforePrint(target, tabId) {
-  const currentTab = await getTab(tabId);
-  const result = {
-    tabUrl: currentTab?.url || null,
-    tabStatus: currentTab?.status || null,
-    tabError: currentTab?.error || null
-  };
-
-  try {
-    const evaluated = await sendDebuggerCommand(target, 'Runtime.evaluate', {
-      returnByValue: true,
-      expression: `(() => {
-        const bodyText = document.body ? document.body.innerText || document.body.textContent || '' : '';
-        return {
-          locationHref: location.href,
-          title: document.title || '',
-          readyState: document.readyState,
-          bodyLength: bodyText.trim().length,
-          bodyPreview: bodyText.replace(/\\s+/g, ' ').trim().slice(0, 240),
-          hasForm: Boolean(document.querySelector('form')),
-          formAction: document.querySelector('form')?.action || null,
-          hasPdfViewer: Boolean(document.querySelector('embed[type="application/pdf"], iframe[src*=".pdf"], pdf-viewer'))
-        };
-      })()`
-    });
-
-    result.document = evaluated.result?.value || null;
-  } catch (error) {
-    result.documentError = error instanceof Error ? error.message : String(error);
-  }
-
-  return result;
 }
 
 function waitForTabComplete(tabId, timeoutMs = 45000) {
@@ -244,10 +200,6 @@ async function capturePagePdf(url, debug) {
 
     await sendDebuggerCommand(target, 'Page.enable');
     await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
-    debug.pageCapture = {
-      ...(debug.pageCapture || {}),
-      beforePrint: await inspectPageBeforePrint(target, tab.id)
-    };
 
     const pdf = await sendDebuggerCommand(target, 'Page.printToPDF', {
       printBackground: true,
@@ -265,7 +217,7 @@ async function capturePagePdf(url, debug) {
     };
 
     return {
-      tabUrl: debug.pageCapture.beforePrint?.tabUrl || tab.url,
+      tabUrl: tab.url,
       pdfBase64: pdf.data
     };
   } finally {
