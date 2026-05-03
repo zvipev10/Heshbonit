@@ -5,6 +5,75 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getFileNameFromUrl(url, fallbackName) {
+  try {
+    const parsed = new URL(url);
+    const lastSegment = decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
+    return lastSegment || fallbackName || 'captured-invoice.pdf';
+  } catch {
+    return fallbackName || 'captured-invoice.pdf';
+  }
+}
+
+function extensionFromMimeType(mimeType) {
+  if (mimeType === 'application/pdf') return '.pdf';
+  if (mimeType === 'image/png') return '.png';
+  if (mimeType === 'image/jpeg') return '.jpg';
+  if (mimeType === 'image/webp') return '.webp';
+  return '';
+}
+
+function withExpectedExtension(fileName, mimeType) {
+  const extension = extensionFromMimeType(mimeType);
+  if (!extension || fileName.toLowerCase().endsWith(extension)) return fileName;
+  return `${fileName.replace(/\.[^.]+$/, '')}${extension}`;
+}
+
+function detectMimeType(bytes, contentType) {
+  const normalizedContentType = (contentType || '').split(';')[0].trim().toLowerCase();
+  if (normalizedContentType === 'application/pdf' || normalizedContentType.startsWith('image/')) {
+    return normalizedContentType;
+  }
+
+  if (
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  ) {
+    return 'application/pdf';
+  }
+
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
+
 function sendDebuggerCommand(target, method, params = {}) {
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(target, method, params, (result) => {
@@ -64,6 +133,33 @@ function waitForTabComplete(tabId, timeoutMs = 45000) {
 
     chrome.tabs.onUpdated.addListener(listener);
   });
+}
+
+async function fetchDirectInvoiceFile(url, fallbackName) {
+  const response = await fetch(url, {
+    credentials: 'include',
+    redirect: 'follow',
+    cache: 'no-store'
+  });
+
+  if (!response.ok) {
+    throw new Error(`Direct file fetch failed with status ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
+  const mimeType = detectMimeType(bytes, response.headers.get('content-type'));
+
+  if (!mimeType) {
+    throw new Error('Direct fetch did not return a PDF or image file');
+  }
+
+  return {
+    finalUrl: response.url,
+    blob: new Blob([arrayBuffer], { type: mimeType }),
+    mimeType,
+    fileName: withExpectedExtension(getFileNameFromUrl(response.url, fallbackName), mimeType)
+  };
 }
 
 async function capturePagePdf(url) {
@@ -128,10 +224,46 @@ async function uploadCapturedPdf({ pdfBase64, uploadUrl, fileName }) {
   return json;
 }
 
+async function uploadCapturedBlob({ blob, uploadUrl, fileName }) {
+  const formData = new FormData();
+  formData.append('invoices', blob, fileName || 'captured-invoice.pdf');
+
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData
+  });
+
+  const json = await response.json().catch(() => null);
+  if (!response.ok || !json?.success) {
+    throw new Error(json?.error || `Upload failed with status ${response.status}`);
+  }
+
+  return json;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'CAPTURE_INVOICE_LINK') return false;
 
   (async () => {
+    try {
+      const directFile = await fetchDirectInvoiceFile(message.url, message.fileName);
+      const uploadResult = await uploadCapturedBlob({
+        blob: directFile.blob,
+        uploadUrl: message.uploadUrl,
+        fileName: directFile.fileName
+      });
+
+      sendResponse({
+        success: true,
+        captureMethod: 'direct_file',
+        tabUrl: directFile.finalUrl,
+        uploadResult
+      });
+      return;
+    } catch {
+      // Not a direct file link, or browser fetch was blocked. Fall back to visual page capture.
+    }
+
     const captured = await capturePagePdf(message.url);
     const uploadResult = await uploadCapturedPdf({
       pdfBase64: captured.pdfBase64,
@@ -141,6 +273,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     sendResponse({
       success: true,
+      captureMethod: 'page_print',
       tabUrl: captured.tabUrl,
       uploadResult
     });
