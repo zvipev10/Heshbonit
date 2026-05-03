@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Heshbonit Browser Capture",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "Captures invoice pages from the user's browser and sends them to Heshbonit for extraction.",
   "permissions": ["debugger", "tabs"],
   "host_permissions": ["<all_urls>"],
