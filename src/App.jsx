@@ -407,6 +407,7 @@ function App() {
       mimeType: r.mimeType,
       gmailResolution: r.gmailResolution,
       gmailSourceUrl: r.gmailSourceUrl || fallbackSourceUrl,
+      captureDebug: r.captureDebug || null,
       supplier: vendorName ?? '—',
       date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
       payment: totalWithoutVat,
@@ -461,7 +462,8 @@ function App() {
     return mapProcessedGmailResult({
       ...processedResult,
       gmailResolution: 'extension_capture',
-      gmailSourceUrl: sourceUrl
+      gmailSourceUrl: sourceUrl,
+      captureDebug: capture.debug || null
     }, rowKey, sourceUrl)
   }
 
@@ -948,6 +950,11 @@ function App() {
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>
                             {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
                           </span>
+                        )}
+                        {result[i].captureDebug && (
+                          <div className="capture-debug">
+                            Capture debug: {JSON.stringify(result[i].captureDebug)}
+                          </div>
                         )}
                       </div>
                     </td>

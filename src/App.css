@@ -332,6 +332,18 @@ input[type="file"] {
   flex-wrap: wrap;
 }
 
+.capture-debug {
+  max-width: 520px;
+  direction: ltr;
+  text-align: left;
+  color: #475467;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .row-actions {
   display: flex;
   align-items: center;
