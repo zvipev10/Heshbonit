@@ -309,7 +309,7 @@ function App() {
           results.push(mapFailedGmailResult(
             r,
             rowKey,
-            formatCaptureError(captureError.message, captureError.captureDebug)
+            captureError.message
           ))
         }
           continue
@@ -371,7 +371,6 @@ function App() {
         const payload = event.data.payload
         if (!payload?.success) {
           const error = new Error(payload?.error || 'Browser capture failed')
-          error.captureDebug = payload?.debug
           reject(error)
           return
         }
@@ -407,7 +406,6 @@ function App() {
       mimeType: r.mimeType,
       gmailResolution: r.gmailResolution,
       gmailSourceUrl: r.gmailSourceUrl || fallbackSourceUrl,
-      captureDebug: r.captureDebug || null,
       supplier: vendorName ?? '—',
       date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
       payment: totalWithoutVat,
@@ -434,15 +432,6 @@ function App() {
     gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
   })
 
-  const formatCaptureError = (message, debug) => {
-    if (!debug) return message
-
-    return [
-      message,
-      `Capture debug: ${JSON.stringify(debug)}`
-    ].join(' | ')
-  }
-
   const captureFailedGmailResult = async (r, rowKey = createLocalRowKey()) => {
     const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
     if (!sourceUrl) return mapFailedGmailResult(r, rowKey)
@@ -455,15 +444,13 @@ function App() {
 
     if (!processedResult?.success) {
       const error = new Error(processedResult?.error || 'Captured file extraction failed')
-      error.captureDebug = capture.debug
       throw error
     }
 
     return mapProcessedGmailResult({
       ...processedResult,
       gmailResolution: 'extension_capture',
-      gmailSourceUrl: sourceUrl,
-      captureDebug: capture.debug || null
+      gmailSourceUrl: sourceUrl
     }, rowKey, sourceUrl)
   }
 
@@ -950,11 +937,6 @@ function App() {
                           <span className={`confidence-badge confidence-${result[i].confidence}`}>
                             {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
                           </span>
-                        )}
-                        {result[i].captureDebug && (
-                          <div className="capture-debug">
-                            Capture debug: {JSON.stringify(result[i].captureDebug)}
-                          </div>
                         )}
                       </div>
                     </td>

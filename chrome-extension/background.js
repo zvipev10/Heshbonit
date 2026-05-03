@@ -5,12 +5,6 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getByteSignature(bytes) {
-  return Array.from(bytes.slice(0, 12))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join(' ');
-}
-
 function getFileNameFromUrl(url, fallbackName) {
   try {
     const parsed = new URL(url);
@@ -198,25 +192,14 @@ function detachDebugger(target) {
   });
 }
 
-function waitForTabComplete(tabId, timeoutMs = 45000, debug) {
+function waitForTabComplete(tabId, timeoutMs = 45000) {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
       resolve({ completed: false, reason: 'timeout' });
     }, timeoutMs);
 
-    const listener = async (updatedTabId, changeInfo, updatedTab) => {
-      if (updatedTabId === tabId && debug) {
-        debug.tabUpdates = debug.tabUpdates || [];
-        debug.tabUpdates.push({
-          changeInfo,
-          url: updatedTab?.url || '',
-          pendingUrl: updatedTab?.pendingUrl || '',
-          title: updatedTab?.title || '',
-          status: updatedTab?.status || ''
-        });
-      }
-
+    const listener = async (updatedTabId, changeInfo) => {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         clearTimeout(timeout);
         chrome.tabs.onUpdated.removeListener(listener);
@@ -228,9 +211,7 @@ function waitForTabComplete(tabId, timeoutMs = 45000, debug) {
   });
 }
 
-function startNetworkDebug(target, debug) {
-  debug.networkResponses = [];
-  debug.fetchResponses = [];
+function startNetworkCapture(target) {
   const candidateResponses = new Map();
   let resolveCapturedFile;
   let capturedFileResolved = false;
@@ -250,23 +231,17 @@ function startNetworkDebug(target, debug) {
     if (method === 'Fetch.requestPaused') {
       const responseHeaders = params.responseHeaders || [];
       const headerMap = Object.fromEntries(responseHeaders.map((header) => [header.name.toLowerCase(), header.value]));
-      const fetchDebug = {
-        event: 'requestPaused',
-        requestId: params.requestId,
-        networkId: params.networkId || '',
-        url: params.request?.url || '',
-        status: params.responseStatusCode || null,
-        contentType: headerMap['content-type'] || '',
-        contentDisposition: headerMap['content-disposition'] || ''
-      };
-      debug.fetchResponses.push(fetchDebug);
+      const url = params.request?.url || '';
+      const status = params.responseStatusCode || null;
+      const contentType = headerMap['content-type'] || '';
+      const contentDisposition = headerMap['content-disposition'] || '';
 
       const shouldTryBody =
-        fetchDebug.status >= 200 &&
-        fetchDebug.status < 300 &&
+        status >= 200 &&
+        status < 300 &&
         (
-          fetchDebug.contentType.toLowerCase().includes('application/pdf') ||
-          fetchDebug.contentDisposition.toLowerCase().includes('.pdf')
+          contentType.toLowerCase().includes('application/pdf') ||
+          contentDisposition.toLowerCase().includes('.pdf')
         );
 
       (async () => {
@@ -275,26 +250,20 @@ function startNetworkDebug(target, debug) {
             const bodyResult = await sendDebuggerCommand(target, 'Fetch.getResponseBody', { requestId: params.requestId });
             const bytes = bytesFromBodyResult(bodyResult);
             const mimeType = detectMimeTypeFromBytes(bytes);
-            fetchDebug.bodyRead = true;
-            fetchDebug.bodyBytes = bytes.length;
-            fetchDebug.bodySignature = getByteSignature(bytes);
-            fetchDebug.detectedMimeType = mimeType;
 
             if (mimeType === 'application/pdf') {
               resolveOnce({
-                finalUrl: fetchDebug.url,
+                finalUrl: url,
                 blob: new Blob([bytes], { type: mimeType }),
                 mimeType,
-                fileName: withExpectedExtension(getFileNameFromUrl(fetchDebug.url, 'captured-invoice.pdf'), mimeType)
+                fileName: withExpectedExtension(getFileNameFromUrl(url, 'captured-invoice.pdf'), mimeType)
               });
             }
           }
-        } catch (error) {
-          fetchDebug.bodyReadError = error instanceof Error ? error.message : String(error);
+        } catch {
+          // Ignore unreadable responses and keep the page loading.
         } finally {
-          await sendDebuggerCommand(target, 'Fetch.continueRequest', { requestId: params.requestId }).catch((error) => {
-            fetchDebug.continueError = error instanceof Error ? error.message : String(error);
-          });
+          await sendDebuggerCommand(target, 'Fetch.continueRequest', { requestId: params.requestId }).catch(() => null);
         }
       })();
     }
@@ -302,48 +271,34 @@ function startNetworkDebug(target, debug) {
     if (method === 'Network.responseReceived') {
       const response = params.response || {};
       const headers = response.headers || {};
-      const responseDebug = {
-        event: 'responseReceived',
-        requestId: params.requestId,
+      const responseInfo = {
         url: response.url || '',
         status: response.status,
         mimeType: response.mimeType || '',
         contentType: headers['content-type'] || headers['Content-Type'] || '',
-        contentDisposition: headers['content-disposition'] || headers['Content-Disposition'] || '',
-        encodedDataLength: response.encodedDataLength || 0
+        contentDisposition: headers['content-disposition'] || headers['Content-Disposition'] || ''
       };
-      debug.networkResponses.push(responseDebug);
 
       if (
         response.status >= 200 &&
         response.status < 300 &&
         (
-          responseDebug.mimeType === 'application/pdf' ||
-          responseDebug.contentType.toLowerCase().includes('application/pdf') ||
-          responseDebug.contentDisposition.toLowerCase().includes('.pdf')
+          responseInfo.mimeType === 'application/pdf' ||
+          responseInfo.contentType.toLowerCase().includes('application/pdf') ||
+          responseInfo.contentDisposition.toLowerCase().includes('.pdf')
         )
       ) {
-        candidateResponses.set(params.requestId, responseDebug);
+        candidateResponses.set(params.requestId, responseInfo);
       }
     }
 
     if (method === 'Network.loadingFinished') {
-      const existing = debug.networkResponses.find((item) => item.requestId === params.requestId);
-      if (existing) {
-        existing.loadingFinished = true;
-        existing.encodedDataLength = params.encodedDataLength || existing.encodedDataLength || 0;
-      }
-
       if (candidateResponses.has(params.requestId)) {
         const candidate = candidateResponses.get(params.requestId);
         sendDebuggerCommand(target, 'Network.getResponseBody', { requestId: params.requestId })
           .then((bodyResult) => {
             const bytes = bytesFromBodyResult(bodyResult);
             const mimeType = detectMimeTypeFromBytes(bytes);
-            candidate.bodyRead = true;
-            candidate.bodyBytes = bytes.length;
-            candidate.bodySignature = getByteSignature(bytes);
-            candidate.detectedMimeType = mimeType;
 
             if (mimeType !== 'application/pdf') return;
 
@@ -354,23 +309,7 @@ function startNetworkDebug(target, debug) {
               fileName: withExpectedExtension(getFileNameFromUrl(candidate.url, 'captured-invoice.pdf'), mimeType)
             });
           })
-          .catch((error) => {
-            candidate.bodyReadError = error instanceof Error ? error.message : String(error);
-          });
-      }
-    }
-
-    if (method === 'Network.loadingFailed') {
-      const existing = debug.networkResponses.find((item) => item.requestId === params.requestId);
-      if (existing) {
-        existing.loadingFailed = true;
-        existing.errorText = params.errorText || '';
-      } else {
-        debug.networkResponses.push({
-          event: 'loadingFailed',
-          requestId: params.requestId,
-          errorText: params.errorText || ''
-        });
+          .catch(() => null);
       }
     }
   };
@@ -386,18 +325,12 @@ function startNetworkDebug(target, debug) {
   };
 }
 
-async function fetchDirectInvoiceFile(url, fallbackName, debug) {
+async function fetchDirectInvoiceFile(url, fallbackName) {
   const response = await fetch(url, {
     credentials: 'include',
     redirect: 'follow',
     cache: 'no-store'
   });
-
-  debug.directFetch = {
-    status: response.status,
-    finalUrl: response.url,
-    contentType: response.headers.get('content-type') || null
-  };
 
   if (!response.ok) {
     throw new Error(`Direct file fetch failed with status ${response.status}`);
@@ -406,15 +339,6 @@ async function fetchDirectInvoiceFile(url, fallbackName, debug) {
   const arrayBuffer = await response.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
   const mimeType = detectMimeType(bytes, response.headers.get('content-type'));
-  debug.directFetch = {
-    ...debug.directFetch,
-    status: response.status,
-    finalUrl: response.url,
-    contentType: response.headers.get('content-type') || null,
-    bytes: arrayBuffer.byteLength,
-    signature: getByteSignature(bytes),
-    detectedMimeType: mimeType
-  };
 
   if (!mimeType) {
     throw new Error('Direct fetch did not return a PDF or image file');
@@ -428,23 +352,13 @@ async function fetchDirectInvoiceFile(url, fallbackName, debug) {
   };
 }
 
-async function capturePagePdf(url, debug) {
+async function capturePagePdf(url) {
   const tab = await createTab('about:blank');
   const target = { tabId: tab.id };
   let attached = false;
-  let networkDebug = null;
+  let networkCapture = null;
 
   try {
-    debug.pageCapture = {
-      initialTab: {
-        id: tab.id,
-        url: tab.url || '',
-        pendingUrl: tab.pendingUrl || '',
-        title: tab.title || '',
-        status: tab.status || ''
-      }
-    };
-
     await attachDebugger(target);
     attached = true;
 
@@ -456,33 +370,23 @@ async function capturePagePdf(url, debug) {
       ]
     });
     await sendDebuggerCommand(target, 'Emulation.setEmulatedMedia', { media: 'screen' });
-    networkDebug = startNetworkDebug(target, debug);
+    networkCapture = startNetworkCapture(target);
 
-    const completionPromise = waitForTabComplete(tab.id, 45000, debug);
+    const completionPromise = waitForTabComplete(tab.id, 45000);
     await sendDebuggerCommand(target, 'Page.navigate', { url });
-    const completion = await completionPromise;
-    debug.pageCapture.afterComplete = completion;
+    await completionPromise;
     await delay(4000);
-    debug.pageCapture.afterDelay = await getTab(tab.id);
-    debug.pageCapture = {
-      ...(debug.pageCapture || {}),
-      tabUrlAfterLoad: tab.url
-    };
 
     const capturedNetworkFile = await Promise.race([
-      networkDebug.capturedFilePromise,
+      networkCapture.capturedFilePromise,
       delay(1000).then(() => null)
     ]);
 
     if (capturedNetworkFile) {
-      debug.pageCapture = {
-        ...(debug.pageCapture || {}),
-        method: 'browser_network_file',
-        beforeReturn: await getTab(tab.id)
-      };
+      const currentTab = await getTab(tab.id);
 
       return {
-        tabUrl: debug.pageCapture.beforeReturn?.url || capturedNetworkFile.finalUrl,
+        tabUrl: currentTab?.url || capturedNetworkFile.finalUrl,
         blob: capturedNetworkFile.blob,
         mimeType: capturedNetworkFile.mimeType,
         fileName: capturedNetworkFile.fileName
@@ -498,19 +402,14 @@ async function capturePagePdf(url, debug) {
       marginLeft: 0.35,
       marginRight: 0.35
     });
-    debug.pageCapture = {
-      ...(debug.pageCapture || {}),
-      method: 'page_print',
-      beforeReturn: await getTab(tab.id),
-      pdfBytesApprox: Math.floor((pdf.data.length * 3) / 4)
-    };
+    const currentTab = await getTab(tab.id);
 
     return {
-      tabUrl: debug.pageCapture.beforeReturn?.url || tab.url,
+      tabUrl: currentTab?.url || tab.url,
       pdfBase64: pdf.data
     };
   } finally {
-    if (networkDebug) networkDebug.stop();
+    if (networkCapture) networkCapture.stop();
     if (attached) {
       await sendDebuggerCommand(target, 'Fetch.disable').catch(() => null);
     }
@@ -566,39 +465,27 @@ async function uploadCapturedBlob({ blob, uploadUrl, fileName }) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'CAPTURE_INVOICE_LINK') return false;
 
-  const debug = {
-    url: message.url,
-    fileName: message.fileName || null,
-    steps: []
-  };
-
   (async () => {
     try {
-      const directFile = await fetchDirectInvoiceFile(message.url, message.fileName, debug);
-      debug.steps.push('direct_file_detected');
+      const directFile = await fetchDirectInvoiceFile(message.url, message.fileName);
       const uploadResult = await uploadCapturedBlob({
         blob: directFile.blob,
         uploadUrl: message.uploadUrl,
         fileName: directFile.fileName
       });
-      debug.steps.push('direct_file_uploaded');
 
       sendResponse({
         success: true,
         captureMethod: 'direct_file',
         tabUrl: directFile.finalUrl,
-        uploadResult,
-        debug
+        uploadResult
       });
       return;
-    } catch (error) {
+    } catch {
       // Not a direct file link, or browser fetch was blocked. Fall back to visual page capture.
-      debug.steps.push('direct_file_failed');
-      debug.directFetchError = error instanceof Error ? error.message : String(error);
     }
 
-    const captured = await capturePagePdf(message.url, debug);
-    debug.steps.push(captured.blob ? 'browser_network_file_captured' : 'page_print_captured');
+    const captured = await capturePagePdf(message.url);
     const uploadResult = captured.blob
       ? await uploadCapturedBlob({
         blob: captured.blob,
@@ -610,20 +497,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         uploadUrl: message.uploadUrl,
         fileName: message.fileName
       });
-    debug.steps.push(captured.blob ? 'browser_network_file_uploaded' : 'page_print_uploaded');
 
     sendResponse({
       success: true,
       captureMethod: captured.blob ? 'browser_network_file' : 'page_print',
       tabUrl: captured.tabUrl,
-      uploadResult,
-      debug
+      uploadResult
     });
   })().catch((error) => {
     sendResponse({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
-      debug
+      error: error instanceof Error ? error.message : String(error)
     });
   });
 
