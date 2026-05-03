@@ -5,6 +5,12 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getByteSignature(bytes) {
+  return Array.from(bytes.slice(0, 12))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join(' ');
+}
+
 function getFileNameFromUrl(url, fallbackName) {
   try {
     const parsed = new URL(url);
@@ -135,12 +141,18 @@ function waitForTabComplete(tabId, timeoutMs = 45000) {
   });
 }
 
-async function fetchDirectInvoiceFile(url, fallbackName) {
+async function fetchDirectInvoiceFile(url, fallbackName, debug) {
   const response = await fetch(url, {
     credentials: 'include',
     redirect: 'follow',
     cache: 'no-store'
   });
+
+  debug.directFetch = {
+    status: response.status,
+    finalUrl: response.url,
+    contentType: response.headers.get('content-type') || null
+  };
 
   if (!response.ok) {
     throw new Error(`Direct file fetch failed with status ${response.status}`);
@@ -149,6 +161,15 @@ async function fetchDirectInvoiceFile(url, fallbackName) {
   const arrayBuffer = await response.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
   const mimeType = detectMimeType(bytes, response.headers.get('content-type'));
+  debug.directFetch = {
+    ...debug.directFetch,
+    status: response.status,
+    finalUrl: response.url,
+    contentType: response.headers.get('content-type') || null,
+    bytes: arrayBuffer.byteLength,
+    signature: getByteSignature(bytes),
+    detectedMimeType: mimeType
+  };
 
   if (!mimeType) {
     throw new Error('Direct fetch did not return a PDF or image file');
@@ -162,7 +183,7 @@ async function fetchDirectInvoiceFile(url, fallbackName) {
   };
 }
 
-async function capturePagePdf(url) {
+async function capturePagePdf(url, debug) {
   const tab = await createTab(url);
   const target = { tabId: tab.id };
   let attached = false;
@@ -170,6 +191,9 @@ async function capturePagePdf(url) {
   try {
     await waitForTabComplete(tab.id, 45000);
     await delay(4000);
+    debug.pageCapture = {
+      tabUrlAfterLoad: tab.url
+    };
 
     await attachDebugger(target);
     attached = true;
@@ -186,6 +210,11 @@ async function capturePagePdf(url) {
       marginLeft: 0.35,
       marginRight: 0.35
     });
+    debug.pageCapture = {
+      ...(debug.pageCapture || {}),
+      method: 'page_print',
+      pdfBytesApprox: Math.floor((pdf.data.length * 3) / 4)
+    };
 
     return {
       tabUrl: tab.url,
@@ -244,43 +273,58 @@ async function uploadCapturedBlob({ blob, uploadUrl, fileName }) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'CAPTURE_INVOICE_LINK') return false;
 
+  const debug = {
+    url: message.url,
+    fileName: message.fileName || null,
+    steps: []
+  };
+
   (async () => {
     try {
-      const directFile = await fetchDirectInvoiceFile(message.url, message.fileName);
+      const directFile = await fetchDirectInvoiceFile(message.url, message.fileName, debug);
+      debug.steps.push('direct_file_detected');
       const uploadResult = await uploadCapturedBlob({
         blob: directFile.blob,
         uploadUrl: message.uploadUrl,
         fileName: directFile.fileName
       });
+      debug.steps.push('direct_file_uploaded');
 
       sendResponse({
         success: true,
         captureMethod: 'direct_file',
         tabUrl: directFile.finalUrl,
-        uploadResult
+        uploadResult,
+        debug
       });
       return;
-    } catch {
+    } catch (error) {
       // Not a direct file link, or browser fetch was blocked. Fall back to visual page capture.
+      debug.steps.push('direct_file_failed');
+      debug.directFetchError = error instanceof Error ? error.message : String(error);
     }
 
-    const captured = await capturePagePdf(message.url);
+    const captured = await capturePagePdf(message.url, debug);
+    debug.steps.push('page_print_captured');
     const uploadResult = await uploadCapturedPdf({
       pdfBase64: captured.pdfBase64,
       uploadUrl: message.uploadUrl,
       fileName: message.fileName
     });
+    debug.steps.push('page_print_uploaded');
 
     sendResponse({
       success: true,
       captureMethod: 'page_print',
       tabUrl: captured.tabUrl,
-      uploadResult
+      uploadResult,
+      debug
     });
   })().catch((error) => {
     sendResponse({
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      debug
     });
   });
 

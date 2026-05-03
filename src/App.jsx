@@ -303,11 +303,15 @@ function App() {
             continue
           }
 
-          try {
-            results.push(await captureFailedGmailResult(r, rowKey))
-          } catch (captureError) {
-            results.push(mapFailedGmailResult(r, rowKey, captureError.message))
-          }
+        try {
+          results.push(await captureFailedGmailResult(r, rowKey))
+        } catch (captureError) {
+          results.push(mapFailedGmailResult(
+            r,
+            rowKey,
+            formatCaptureError(captureError.message, captureError.captureDebug)
+          ))
+        }
           continue
         }
 
@@ -366,7 +370,9 @@ function App() {
 
         const payload = event.data.payload
         if (!payload?.success) {
-          reject(new Error(payload?.error || 'Browser capture failed'))
+          const error = new Error(payload?.error || 'Browser capture failed')
+          error.captureDebug = payload?.debug
+          reject(error)
           return
         }
 
@@ -427,6 +433,15 @@ function App() {
     gmailSourceUrl: r.gmailSourceUrl || r.gmailDebug?.selectedLink || null,
   })
 
+  const formatCaptureError = (message, debug) => {
+    if (!debug) return message
+
+    return [
+      message,
+      `Capture debug: ${JSON.stringify(debug)}`
+    ].join(' | ')
+  }
+
   const captureFailedGmailResult = async (r, rowKey = createLocalRowKey()) => {
     const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
     if (!sourceUrl) return mapFailedGmailResult(r, rowKey)
@@ -438,7 +453,9 @@ function App() {
     const processedResult = capture.uploadResult?.results?.[0]
 
     if (!processedResult?.success) {
-      throw new Error(processedResult?.error || 'Captured file extraction failed')
+      const error = new Error(processedResult?.error || 'Captured file extraction failed')
+      error.captureDebug = capture.debug
+      throw error
     }
 
     return mapProcessedGmailResult({
