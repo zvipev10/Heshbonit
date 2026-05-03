@@ -4,6 +4,7 @@ import './App.css'
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/invoices/upload'
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/upload', '') ?? '/api/invoices'
 const GMAIL_API_BASE = import.meta.env.VITE_GMAIL_API_URL ?? '/api/gmail'
+const VAT_RATE = 0.18
 
 function App() {
   const [processing, setProcessing] = useState(false)
@@ -67,6 +68,8 @@ function App() {
     if (Number.isNaN(numeric)) return ''
     return numeric.toFixed(2)
   }
+
+  const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100
 
   const displayDateToISO = (value) => {
     if (!value || value === '—') return ''
@@ -488,6 +491,16 @@ function App() {
     }))
   }
 
+  const handleCalculateWithVat = () => {
+    setResult(prev => prev.map((res) => {
+      if (!selectedRows.has(res.rowKey) || res.failed) return res
+      const total = typeof res.total === 'number' ? res.total : parseFloat(res.total)
+      if (!Number.isFinite(total)) return res
+      const payment = roundMoney(total / (1 + VAT_RATE))
+      return { ...res, payment, vat: roundMoney(total - payment), isDirty: true }
+    }))
+  }
+
   const handleMarkPrinted = () => {
     setResult(prev => prev.map((res) => {
       if (!selectedRows.has(res.rowKey) || res.failed) return res
@@ -875,6 +888,7 @@ function App() {
           <div className="bulk-actions">
             <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
             <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
+            <button type="button" onClick={handleCalculateWithVat} className="bulk-action-button" disabled={!hasSelectedRows}>עם מע"מ</button>
             <button type="button" onClick={handleMarkPrinted} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
             <button type="button" onClick={handleSendToMorning} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
               {morningSending ? 'Sending...' : 'Send to Morning'}
