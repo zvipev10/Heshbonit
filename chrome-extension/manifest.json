@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Heshbonit Browser Capture",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Captures invoice pages from the user's browser and sends them to Heshbonit for extraction.",
   "permissions": ["debugger", "tabs"],
   "host_permissions": ["<all_urls>"],
@@ -13,7 +13,9 @@
       "matches": [
         "http://localhost/*",
         "http://127.0.0.1/*",
-        "https://*.up.railway.app/*"
+        "https://*.up.railway.app/*",
+        "https://heshbonit-sable.vercel.app/*",
+        "https://llm-test-kappa.vercel.app/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
