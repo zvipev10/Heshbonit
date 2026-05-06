@@ -29,6 +29,35 @@ function withExpectedExtension(fileName, mimeType) {
   return `${fileName.replace(/\.[^.]+$/, '')}${extension}`;
 }
 
+function mimeTypeFromFileName(fileName) {
+  const normalized = (fileName || '').toLowerCase();
+  if (normalized.endsWith('.pdf')) return 'application/pdf';
+  if (normalized.endsWith('.png')) return 'image/png';
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) return 'image/jpeg';
+  if (normalized.endsWith('.webp')) return 'image/webp';
+  return null;
+}
+
+function getBlobContentType(blob, fileName) {
+  return blob.type || mimeTypeFromFileName(fileName) || 'application/pdf';
+}
+
+function getApiBaseFromUploadUrl(uploadUrl) {
+  const parsed = new URL(uploadUrl);
+  parsed.pathname = parsed.pathname.replace(/\/upload\/?$/, '');
+  parsed.search = '';
+  parsed.hash = '';
+  return parsed.toString().replace(/\/$/, '');
+}
+
+function createBlobRequestId(clientToken) {
+  const [, , , storeId = ''] = clientToken.split('_');
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${storeId}:${Date.now()}:${random}`;
+}
+
 function detectMimeType(bytes, contentType) {
   const normalizedContentType = (contentType || '').split(';')[0].trim().toLowerCase();
   if (normalizedContentType === 'application/pdf' || normalizedContentType.startsWith('image/')) {
@@ -427,10 +456,71 @@ function base64ToBlob(base64, mimeType) {
   return new Blob([bytes], { type: mimeType });
 }
 
-async function uploadCapturedPdf({ pdfBase64, uploadUrl, fileName }) {
+async function uploadCapturedBlobViaBlob({ blob, uploadUrl, fileName }) {
+  const apiBase = getApiBaseFromUploadUrl(uploadUrl);
+  const contentType = getBlobContentType(blob, fileName);
+  const safeFileName = withExpectedExtension(fileName || 'captured-invoice.pdf', contentType);
+
+  const tokenResponse = await fetch(`${apiBase}/blob-token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      filename: safeFileName,
+      contentType,
+      size: blob.size
+    })
+  });
+
+  const tokenJson = await tokenResponse.json().catch(() => null);
+  if (!tokenResponse.ok || !tokenJson?.token || !tokenJson?.pathname) {
+    throw new Error(tokenJson?.error || `Blob token request failed with status ${tokenResponse.status}`);
+  }
+
+  const uploadResponse = await fetch(`https://vercel.com/api/blob/?pathname=${encodeURIComponent(tokenJson.pathname)}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${tokenJson.token}`,
+      'x-api-version': '12',
+      'x-api-blob-request-id': createBlobRequestId(tokenJson.token),
+      'x-api-blob-request-attempt': '0',
+      'x-vercel-blob-access': 'public',
+      'x-content-type': contentType
+    },
+    body: blob
+  });
+
+  const uploadJson = await uploadResponse.json().catch(() => null);
+  if (!uploadResponse.ok || !uploadJson?.url) {
+    throw new Error(uploadJson?.error?.message || uploadJson?.error || `Blob upload failed with status ${uploadResponse.status}`);
+  }
+
+  const processResponse = await fetch(`${apiBase}/process-blob`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      url: uploadJson.url,
+      filename: safeFileName,
+      mimeType: contentType
+    })
+  });
+
+  const processJson = await processResponse.json().catch(() => null);
+  if (!processResponse.ok || !processJson?.success) {
+    throw new Error(processJson?.error || `Blob processing failed with status ${processResponse.status}`);
+  }
+
+  return {
+    success: true,
+    total: 1,
+    results: [processJson.result]
+  };
+}
+
+async function uploadCapturedBlobViaUploadEndpoint({ blob, uploadUrl, fileName }) {
+  const contentType = getBlobContentType(blob, fileName);
+  const safeFileName = withExpectedExtension(fileName || 'captured-invoice.pdf', contentType);
   const formData = new FormData();
-  const blob = base64ToBlob(pdfBase64, 'application/pdf');
-  formData.append('invoices', blob, fileName || 'captured-invoice.pdf');
+  formData.append('invoices', blob, safeFileName);
 
   const response = await fetch(uploadUrl, {
     method: 'POST',
@@ -445,21 +535,22 @@ async function uploadCapturedPdf({ pdfBase64, uploadUrl, fileName }) {
   return json;
 }
 
-async function uploadCapturedBlob({ blob, uploadUrl, fileName }) {
-  const formData = new FormData();
-  formData.append('invoices', blob, fileName || 'captured-invoice.pdf');
-
-  const response = await fetch(uploadUrl, {
-    method: 'POST',
-    body: formData
+async function uploadCapturedPdf({ pdfBase64, uploadUrl, fileName }) {
+  const blob = base64ToBlob(pdfBase64, 'application/pdf');
+  return uploadCapturedBlob({
+    blob,
+    uploadUrl,
+    fileName: fileName || 'captured-invoice.pdf'
   });
+}
 
-  const json = await response.json().catch(() => null);
-  if (!response.ok || !json?.success) {
-    throw new Error(json?.error || `Upload failed with status ${response.status}`);
+async function uploadCapturedBlob({ blob, uploadUrl, fileName }) {
+  try {
+    return await uploadCapturedBlobViaBlob({ blob, uploadUrl, fileName });
+  } catch (error) {
+    console.warn('Heshbonit Blob upload failed, falling back to direct upload.', error);
+    return uploadCapturedBlobViaUploadEndpoint({ blob, uploadUrl, fileName });
   }
-
-  return json;
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
