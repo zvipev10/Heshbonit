@@ -250,10 +250,11 @@ function App() {
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
         return {
-          rowKey: createLocalRowKey(),
+          rowKey: typeof r.id === 'number' ? `db:${r.id}` : createLocalRowKey(),
+          id: typeof r.id === 'number' ? r.id : null,
           failed: false,
           fileName: r.filename,
-          fileUrl: fileUrls[i] ?? null,
+          fileUrl: typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (fileUrls[i] ?? null),
           fileData: r.fileData,
           mimeType: r.mimeType,
           supplier: vendorName ?? '—',
@@ -266,8 +267,8 @@ function App() {
           morningCategoryId: morningCategoryId || null,
           morningCategoryName: morningCategoryName || null,
           morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: false,
-          isDirty: true,
+          isStoredRecord: typeof r.id === 'number',
+          isDirty: typeof r.id !== 'number',
           source: 'upload',
         }
       })
@@ -324,10 +325,11 @@ function App() {
 
         const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-        const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null
+        const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null)
 
         results.push({
-          rowKey: createLocalRowKey(),
+          rowKey: typeof r.id === 'number' ? `db:${r.id}` : createLocalRowKey(),
+          id: typeof r.id === 'number' ? r.id : null,
           failed: false,
           fileName: r.filename,
           fileUrl,
@@ -345,8 +347,8 @@ function App() {
           morningCategoryId: morningCategoryId || null,
           morningCategoryName: morningCategoryName || null,
           morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: false,
-          isDirty: true,
+          isStoredRecord: typeof r.id === 'number',
+          isDirty: typeof r.id !== 'number',
           source: 'gmail'
         })
       }
@@ -402,10 +404,11 @@ function App() {
   const mapProcessedGmailResult = (r, rowKey = createLocalRowKey(), fallbackSourceUrl = null) => {
     const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
     const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-    const fileUrl = r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null)
+    const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null))
 
     return {
-      rowKey,
+      rowKey: typeof r.id === 'number' ? `db:${r.id}` : rowKey,
+      id: typeof r.id === 'number' ? r.id : null,
       failed: false,
       fileName: r.filename,
       fileUrl,
@@ -423,8 +426,8 @@ function App() {
       morningCategoryId: morningCategoryId || null,
       morningCategoryName: morningCategoryName || null,
       morningCategoryCode: morningCategoryCode ?? null,
-      isStoredRecord: false,
-      isDirty: true,
+      isStoredRecord: typeof r.id === 'number',
+      isDirty: typeof r.id !== 'number',
       source: 'gmail'
     }
   }
