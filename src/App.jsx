@@ -28,6 +28,8 @@ function App() {
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
+  const [openRowMenuKey, setOpenRowMenuKey] = useState(null)
+  const [openFractionMenuKey, setOpenFractionMenuKey] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
   const [morningSending, setMorningSending] = useState(false)
@@ -606,16 +608,23 @@ function App() {
     setSelectedRows(allSelected ? new Set() : new Set(result.map(row => row.rowKey)))
   }
 
-  const handleCopyWithoutVat = () => {
+  const closeRowMenu = () => {
+    setOpenRowMenuKey(null)
+    setOpenFractionMenuKey(null)
+  }
+
+  const rowKeySet = (rowKey) => new Set([rowKey])
+
+  const handleCopyWithoutVat = (rowKeys = selectedRows) => {
     setResult(prev => prev.map((res) => {
-      if (!selectedRows.has(res.rowKey) || res.failed) return res
+      if (!rowKeys.has(res.rowKey) || res.failed) return res
       return { ...res, payment: res.total, vat: 0, isDirty: true }
     }))
   }
 
-  const handleCalculateWithVat = () => {
+  const handleCalculateWithVat = (rowKeys = selectedRows) => {
     setResult(prev => prev.map((res) => {
-      if (!selectedRows.has(res.rowKey) || res.failed) return res
+      if (!rowKeys.has(res.rowKey) || res.failed) return res
       const total = typeof res.total === 'number' ? res.total : parseFloat(res.total)
       if (!Number.isFinite(total)) return res
       const payment = roundMoney(total / (1 + VAT_RATE))
@@ -623,16 +632,16 @@ function App() {
     }))
   }
 
-  const handleMarkPrinted = () => {
+  const handleMarkPrinted = (rowKeys = selectedRows) => {
     setResult(prev => prev.map((res) => {
-      if (!selectedRows.has(res.rowKey) || res.failed) return res
+      if (!rowKeys.has(res.rowKey) || res.failed) return res
       return { ...res, printed: 'כן', isDirty: true }
     }))
   }
 
-  const handleApplyFraction = (fraction) => {
+  const handleApplyFraction = (fraction, rowKeys = selectedRows) => {
     setResult(prev => prev.map((res) => {
-      if (!selectedRows.has(res.rowKey) || res.failed) return res
+      if (!rowKeys.has(res.rowKey) || res.failed) return res
       const fractions = { '2/3': 2 / 3, '1/2': 0.5, '1/3': 1 / 3, '1/4': 0.25 }
       const multiplier = fractions[fraction] || 1
       return {
@@ -645,10 +654,10 @@ function App() {
     }))
   }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = (rowKeys = selectedRows) => {
     setResult(prev => {
-      const removed = prev.filter(row => selectedRows.has(row.rowKey))
-      const kept = prev.filter(row => !selectedRows.has(row.rowKey))
+      const removed = prev.filter(row => rowKeys.has(row.rowKey))
+      const kept = prev.filter(row => !rowKeys.has(row.rowKey))
 
       removed.forEach(res => {
         if (res.fileUrl && !kept.some(row => row.fileUrl === res.fileUrl)) {
@@ -658,14 +667,20 @@ function App() {
 
       return kept
     })
-    if (editingCell?.rowKey && selectedRows.has(editingCell.rowKey)) {
+    if (editingCell?.rowKey && rowKeys.has(editingCell.rowKey)) {
       setEditingCell(null)
     }
-    setSelectedRows(new Set())
+    setSelectedRows(prev => {
+      if (rowKeys === selectedRows) return new Set()
+      const next = new Set(prev)
+      rowKeys.forEach(rowKey => next.delete(rowKey))
+      return next
+    })
+    closeRowMenu()
   }
 
-  const handleSendToMorning = async () => {
-    const selectedStoredRows = result.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed)
+  const handleSendToMorning = async (rowKeys = selectedRows) => {
+    const selectedStoredRows = result.filter(row => rowKeys.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed)
 
     if (selectedStoredRows.length === 0) {
       setError('Select saved database rows before sending to Morning')
@@ -720,6 +735,7 @@ function App() {
       setError(err.message)
     } finally {
       setMorningSending(false)
+      closeRowMenu()
     }
   }
 
@@ -1119,6 +1135,88 @@ function App() {
                             </svg>
                           </a>
                         )}
+                        <div className="row-menu-wrapper">
+                          <button
+                            type="button"
+                            className="row-menu-button"
+                            onClick={() => {
+                              setOpenRowMenuKey(openRowMenuKey === res.rowKey ? null : res.rowKey)
+                              setOpenFractionMenuKey(null)
+                            }}
+                            aria-label="פעולות לשורה"
+                            title="פעולות"
+                          >
+                            ⋮
+                          </button>
+                          {openRowMenuKey === res.rowKey && (
+                            <div className="row-menu">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCopyWithoutVat(rowKeySet(res.rowKey))
+                                  closeRowMenu()
+                                }}
+                              >
+                                ללא מע"מ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCalculateWithVat(rowKeySet(res.rowKey))
+                                  closeRowMenu()
+                                }}
+                              >
+                                עם מע"מ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleMarkPrinted(rowKeySet(res.rowKey))
+                                  closeRowMenu()
+                                }}
+                              >
+                                מודפס
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!res.isStoredRecord || typeof res.id !== 'number' || morningSending}
+                                onClick={() => handleSendToMorning(rowKeySet(res.rowKey))}
+                              >
+                                {morningSending ? 'Sending...' : 'Send to Morning'}
+                              </button>
+                              <button
+                                type="button"
+                                className="row-menu-fraction-trigger"
+                                onClick={() => setOpenFractionMenuKey(openFractionMenuKey === res.rowKey ? null : res.rowKey)}
+                              >
+                                סכום חלקי
+                              </button>
+                              {openFractionMenuKey === res.rowKey && (
+                                <div className="row-fraction-options">
+                                  {['2/3', '1/2', '1/3', '1/4'].map((fraction) => (
+                                    <button
+                                      key={fraction}
+                                      type="button"
+                                      onClick={() => {
+                                        handleApplyFraction(fraction, rowKeySet(res.rowKey))
+                                        closeRowMenu()
+                                      }}
+                                    >
+                                      {fraction}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                className="row-menu-delete"
+                                onClick={() => handleDeleteSelected(rowKeySet(res.rowKey))}
+                              >
+                                מחק
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

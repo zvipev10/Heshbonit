@@ -336,6 +336,7 @@ input[type="file"] {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
 }
 
 .file-link {
@@ -366,6 +367,88 @@ input[type="file"] {
 .file-link svg {
   width: 18px;
   height: 18px;
+}
+
+.row-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.row-menu-button:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.row-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 170px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  padding: 6px;
+  text-align: right;
+}
+
+.row-menu button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #334155;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: right;
+  cursor: pointer;
+}
+
+.row-menu button:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.row-menu button:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.row-menu .row-menu-delete {
+  color: #b91c1c;
+}
+
+.row-fraction-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin: 4px 0 6px;
+  padding: 6px;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.row-fraction-options button {
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
 }
 
 .error-banner {
