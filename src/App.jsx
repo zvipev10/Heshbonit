@@ -178,6 +178,7 @@ function App() {
       payment: inv.totalWithoutVat,
       vat: inv.vat,
       total: inv.totalWithVat,
+      originalTotalWithVat: inv.originalTotalWithVat ?? inv.totalWithVat,
       printed: inv.printed || 'לא',
       fileName: inv.fileName,
       isStoredRecord: true,
@@ -250,6 +251,26 @@ function App() {
       createdBlobUrls.clear()
     }
   }, [])
+
+  useEffect(() => {
+    if (!openRowMenuKey) return
+
+    const handlePointerDown = (event) => {
+      if (event.target?.closest?.('.row-menu-wrapper')) return
+      closeRowMenu()
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeRowMenu()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openRowMenuKey])
 
   const processFiles = async (selectedFiles) => {
     if (!selectedFiles.length) return
@@ -331,7 +352,7 @@ function App() {
             continue
           }
 
-          const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+          const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
           const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
           results.push({
@@ -347,6 +368,7 @@ function App() {
             payment: totalWithoutVat,
             vat,
             total: totalWithVat,
+            originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
             printed: 'לא',
             confidence,
             morningCategoryId: morningCategoryId || null,
@@ -432,7 +454,7 @@ function App() {
           continue
         }
 
-        const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+        const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
         const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null)
 
@@ -451,6 +473,7 @@ function App() {
           payment: totalWithoutVat,
           vat,
           total: totalWithVat,
+          originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
           printed: 'לא',
           confidence,
           morningCategoryId: morningCategoryId || null,
@@ -514,7 +537,7 @@ function App() {
   }
 
   const mapProcessedGmailResult = (r, rowKey = createLocalRowKey(), fallbackSourceUrl = null) => {
-    const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+    const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
     const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
     const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null))
 
@@ -533,6 +556,7 @@ function App() {
       payment: totalWithoutVat,
       vat,
       total: totalWithVat,
+      originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
       printed: 'לא',
       confidence,
       morningCategoryId: morningCategoryId || null,
@@ -651,6 +675,17 @@ function App() {
         total: res.total != null ? res.total * multiplier : null,
         isDirty: true,
       }
+    }))
+  }
+
+  const handleRestoreOriginalTotal = (rowKeys = selectedRows) => {
+    setResult(prev => prev.map((res) => {
+      if (!rowKeys.has(res.rowKey) || res.failed) return res
+      const originalTotal = typeof res.originalTotalWithVat === 'number'
+        ? res.originalTotalWithVat
+        : parseFloat(res.originalTotalWithVat)
+      if (!Number.isFinite(originalTotal)) return res
+      return { ...res, total: originalTotal, isDirty: true }
     }))
   }
 
@@ -901,6 +936,7 @@ function App() {
           vendorName: res.supplier === '—' ? null : res.supplier,
           date: dateToISO(res.date),
           totalWithVat: res.total,
+          originalTotalWithVat: res.originalTotalWithVat ?? res.total,
           totalWithoutVat: res.payment,
           vat: res.vat,
           printed: res.printed || 'לא',
@@ -1041,10 +1077,11 @@ function App() {
 
           <div className="bulk-actions">
             <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
-            <button type="button" onClick={handleCopyWithoutVat} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
-            <button type="button" onClick={handleCalculateWithVat} className="bulk-action-button" disabled={!hasSelectedRows}>עם מע"מ</button>
-            <button type="button" onClick={handleMarkPrinted} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
-            <button type="button" onClick={handleSendToMorning} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
+            <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
+            <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={!hasSelectedRows}>עם מע"מ</button>
+            <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
+            <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={!hasSelectedRows}>שחזר סכום</button>
+            <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
               {morningSending ? 'Sending...' : 'Send to Morning'}
             </button>
             <div className="bulk-action-dropdown-wrapper">
@@ -1056,7 +1093,7 @@ function App() {
                 <option value="1/4">1/4</option>
               </select>
             </div>
-            <button type="button" onClick={handleDeleteSelected} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows}>מחק</button>
+            <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows}>מחק</button>
           </div>
 
           <div className="table-scroll">
@@ -1176,6 +1213,15 @@ function App() {
                                 }}
                               >
                                 מודפס
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleRestoreOriginalTotal(rowKeySet(res.rowKey))
+                                  closeRowMenu()
+                                }}
+                              >
+                                שחזר סכום
                               </button>
                               <button
                                 type="button"
