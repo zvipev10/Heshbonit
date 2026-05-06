@@ -408,8 +408,24 @@ input[type="file"] {
   color: #b91c1c;
 }
 
+.row-dirty td {
+  background: #fef2f2;
+}
+
+.row-new-upload td {
+  background: #ecfdf3;
+}
+
 .row-selected td {
   background: #eff6ff;
+}
+
+.row-selected.row-dirty td {
+  background: #fee2e2;
+}
+
+.row-selected.row-new-upload td {
+  background: #dcfce7;
 }
 
 .failed-cell {

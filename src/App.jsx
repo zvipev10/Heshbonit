@@ -162,6 +162,7 @@ function App() {
       fileName: inv.fileName,
       isStoredRecord: true,
       isDirty: false,
+      isNewUpload: false,
       source: inv.source || 'database',
       morningCategoryId: inv.morningCategoryId || null,
       morningCategoryName: inv.morningCategoryName || null,
@@ -326,6 +327,7 @@ function App() {
             morningCategoryCode: morningCategoryCode ?? null,
             isStoredRecord: typeof r.id === 'number',
             isDirty: typeof r.id !== 'number',
+            isNewUpload: typeof r.id === 'number',
             source: 'upload',
           })
         } catch (fileError) {
@@ -415,6 +417,7 @@ function App() {
           morningCategoryCode: morningCategoryCode ?? null,
           isStoredRecord: typeof r.id === 'number',
           isDirty: typeof r.id !== 'number',
+          isNewUpload: typeof r.id === 'number',
           source: 'gmail'
         })
       }
@@ -494,6 +497,7 @@ function App() {
       morningCategoryCode: morningCategoryCode ?? null,
       isStoredRecord: typeof r.id === 'number',
       isDirty: typeof r.id !== 'number',
+      isNewUpload: typeof r.id === 'number',
       source: 'gmail'
     }
   }
@@ -692,6 +696,14 @@ function App() {
       updated[index].isDirty = true
       return updated
     })
+  }
+
+  const getRowClassName = (row) => {
+    const classes = []
+    if (selectedRows.has(row.rowKey)) classes.push('row-selected')
+    if (row.isDirty) classes.push('row-dirty')
+    if (row.isNewUpload) classes.push('row-new-upload')
+    return classes.join(' ')
   }
 
   const renderEditableCell = (rowIndex, field, displayValue, inputType = 'text') => {
@@ -1008,8 +1020,7 @@ function App() {
                 ) : (
                   <tr
                     key={res.rowKey}
-                    className={selectedRows.has(res.rowKey) ? 'row-selected' : ''}
-                    style={res.isDirty ? { backgroundColor: '#fef2f2' } : undefined}
+                    className={getRowClassName(res)}
                   >
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
