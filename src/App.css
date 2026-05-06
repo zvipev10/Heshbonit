@@ -382,6 +382,7 @@ input[type="file"] {
   color: #d92d20;
   font-weight: 600;
   font-size: 0.96rem;
+  white-space: pre-line;
 }
 
 .confidence-badge {

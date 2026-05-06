@@ -112,6 +112,22 @@ function App() {
     return `${dateKey}|${totalKey}`
   }
 
+  const isDuplicateResult = (item) => Boolean(item?.duplicate)
+
+  const formatDuplicateMessage = (item) => {
+    const existing = item.existingInvoice || {}
+    const date = item.data?.date
+      ? new Date(item.data.date).toLocaleDateString('he-IL')
+      : (existing.date ? new Date(existing.date).toLocaleDateString('he-IL') : '—')
+    const total = normalizeAmount(item.data?.totalWithVat ?? existing.totalWithVat)
+    return `${item.filename || item.fileName || 'invoice'} — חשבונית כפולה שכבר קיימת בבסיס הנתונים: ${date} | ₪${total}`
+  }
+
+  const buildDuplicateMessage = (duplicates) => {
+    if (!duplicates.length) return null
+    return `נמצאו ${duplicates.length} חשבוניות כפולות שלא נוספו לטבלה:\n${duplicates.map(formatDuplicateMessage).join('\n')}`
+  }
+
   const base64ToBlobUrl = (base64, mimeType) => {
     try {
       const binary = atob(base64)
@@ -242,6 +258,7 @@ function App() {
 
     try {
       const results = []
+      const duplicates = []
 
       for (const [i, file] of selectedFiles.entries()) {
         try {
@@ -293,6 +310,11 @@ function App() {
           }
 
           const r = processJson.result
+          if (isDuplicateResult(r)) {
+            duplicates.push(r)
+            continue
+          }
+
           if (!r?.success) {
             results.push({
               rowKey: createLocalRowKey(),
@@ -342,6 +364,8 @@ function App() {
       }
 
       setResult(prev => sortResultsByDateAsc([...prev, ...results]))
+      const duplicateMessage = buildDuplicateMessage(duplicates)
+      if (duplicateMessage) setError(duplicateMessage)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -369,8 +393,14 @@ function App() {
       setGmailSummary({ count: json.total ?? json.results?.length ?? 0 })
 
       const results = []
+      const duplicates = []
       for (const r of json.results) {
         if (!r.success) {
+          if (isDuplicateResult(r)) {
+            duplicates.push(r)
+            continue
+          }
+
           const rowKey = createLocalRowKey()
           const sourceUrl = r.gmailSourceUrl || r.gmailDebug?.selectedLink || null
 
@@ -380,7 +410,12 @@ function App() {
           }
 
         try {
-          results.push(await captureFailedGmailResult(r, rowKey))
+          const capturedResult = await captureFailedGmailResult(r, rowKey)
+          if (isDuplicateResult(capturedResult)) {
+            duplicates.push(capturedResult)
+          } else {
+            results.push(capturedResult)
+          }
         } catch (captureError) {
           results.push(mapFailedGmailResult(
             r,
@@ -423,6 +458,8 @@ function App() {
       }
 
       setResult(prev => sortResultsByDateAsc([...prev, ...results]))
+      const duplicateMessage = buildDuplicateMessage(duplicates)
+      if (duplicateMessage) setError(duplicateMessage)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -521,6 +558,10 @@ function App() {
       fileName: r.filename || 'captured-invoice.pdf'
     })
     const processedResult = capture.uploadResult?.results?.[0]
+
+    if (isDuplicateResult(processedResult)) {
+      return processedResult
+    }
 
     if (!processedResult?.success) {
       const error = new Error(processedResult?.error || 'Captured file extraction failed')
