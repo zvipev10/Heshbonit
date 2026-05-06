@@ -385,6 +385,24 @@ input[type="file"] {
   white-space: pre-line;
 }
 
+.duplicate-notice {
+  max-width: 960px;
+  margin: 18px auto 0;
+  background: #fff8e6;
+  border: 1px solid #facc15;
+  border-radius: 14px;
+  padding: 14px 18px;
+  text-align: center;
+}
+
+.duplicate-notice p {
+  margin: 0;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: pre-line;
+}
+
 .confidence-badge {
   display: inline-block;
   font-size: 0.78rem;

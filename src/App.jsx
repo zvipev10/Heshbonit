@@ -24,6 +24,7 @@ function App() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState([])
   const [error, setError] = useState(null)
+  const [duplicateNotice, setDuplicateNotice] = useState(null)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
@@ -116,16 +117,17 @@ function App() {
 
   const formatDuplicateMessage = (item) => {
     const existing = item.existingInvoice || {}
+    const vendor = existing.vendorName || item.data?.vendorName || '—'
     const date = item.data?.date
       ? new Date(item.data.date).toLocaleDateString('he-IL')
       : (existing.date ? new Date(existing.date).toLocaleDateString('he-IL') : '—')
     const total = normalizeAmount(item.data?.totalWithVat ?? existing.totalWithVat)
-    return `${item.filename || item.fileName || 'invoice'} — חשבונית כפולה שכבר קיימת בבסיס הנתונים: ${date} | ₪${total}`
+    return `${item.filename || item.fileName || 'invoice'} — כבר קיימת חשבונית עבור ${vendor}, ${date}, ₪${total}`
   }
 
   const buildDuplicateMessage = (duplicates) => {
     if (!duplicates.length) return null
-    return `נמצאו ${duplicates.length} חשבוניות כפולות שלא נוספו לטבלה:\n${duplicates.map(formatDuplicateMessage).join('\n')}`
+    return `חשבוניות כפולות שלא נוספו לטבלה:\n${duplicates.map(formatDuplicateMessage).join('\n')}`
   }
 
   const base64ToBlobUrl = (base64, mimeType) => {
@@ -253,6 +255,7 @@ function App() {
     setProcessing(true)
     setSelectedRows(new Set())
     setError(null)
+    setDuplicateNotice(null)
 
     const fileUrls = selectedFiles.map(file => registerBlobUrl(URL.createObjectURL(file)))
 
@@ -363,9 +366,9 @@ function App() {
         }
       }
 
-      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
+      setResult(prev => sortResultsByDateAsc([...prev, ...results].filter(item => !isDuplicateResult(item))))
       const duplicateMessage = buildDuplicateMessage(duplicates)
-      if (duplicateMessage) setError(duplicateMessage)
+      if (duplicateMessage) setDuplicateNotice(duplicateMessage)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -376,6 +379,7 @@ function App() {
   const handleGmailSync = async () => {
     setGmailLoading(true)
     setError(null)
+    setDuplicateNotice(null)
 
     try {
       const res = await fetch(`${GMAIL_API_BASE}/sync`, { method: 'POST' })
@@ -457,9 +461,9 @@ function App() {
         })
       }
 
-      setResult(prev => sortResultsByDateAsc([...prev, ...results]))
+      setResult(prev => sortResultsByDateAsc([...prev, ...results].filter(item => !isDuplicateResult(item))))
       const duplicateMessage = buildDuplicateMessage(duplicates)
-      if (duplicateMessage) setError(duplicateMessage)
+      if (duplicateMessage) setDuplicateNotice(duplicateMessage)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -826,6 +830,7 @@ function App() {
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError(null)
+    setDuplicateNotice(null)
 
     try {
       const duplicateGroups = new Map()
@@ -919,9 +924,10 @@ function App() {
     }
   }
 
-  const successResults = result.filter(r => !r.failed)
+  const visibleResults = result.filter(r => !isDuplicateResult(r))
+  const successResults = visibleResults.filter(r => !r.failed)
   const hasSelectedRows = selectedRows.size > 0
-  const selectedStoredRowsCount = result.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
+  const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
 
   return (
     <div className="container">
@@ -962,6 +968,12 @@ function App() {
             {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
           </button>
         </div>
+
+        {duplicateNotice && (
+          <div className="duplicate-notice">
+            <p>{duplicateNotice}</p>
+          </div>
+        )}
       </section>
 
       {processing && (
@@ -984,10 +996,10 @@ function App() {
         </div>
       )}
 
-      {result.length > 0 && (
+      {visibleResults.length > 0 && (
         <section className="results">
           <div className="results-header">
-            <h2>דוח חשבוניות ({result.length})</h2>
+            <h2>דוח חשבוניות ({visibleResults.length})</h2>
           </div>
 
           {gmailSummary && (
@@ -1049,7 +1061,7 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {result.map((res, i) => res.failed ? (
+                {visibleResults.map((res, i) => res.failed ? (
                   <tr key={res.rowKey} className="row-failed">
                     <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
                     <td>{i + 1}</td>
