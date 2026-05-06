@@ -158,14 +158,18 @@ function App() {
   useEffect(() => {
     const loadDataFromDatabase = async () => {
       try {
-        const response = await fetch(`${API_BASE}/list`)
-        const json = await response.json()
+        const response = await fetch(`${API_BASE}/list`, { cache: 'no-store' })
+        const json = await response.json().catch(() => null)
+        if (!response.ok || !json?.success) {
+          throw new Error(json?.error || 'Failed to load data from database')
+        }
         if (json.success && json.invoices) {
           const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
           setResult(sortResultsByDateAsc(mappedInvoices))
         }
       } catch (err) {
         console.error('Failed to load data from database:', err)
+        setError(err.message)
       } finally {
         setDbLoaded(true)
       }
@@ -775,7 +779,7 @@ function App() {
         throw new Error(json.error || 'Failed to save to database')
       }
 
-      const listResponse = await fetch(`${API_BASE}/list`)
+      const listResponse = await fetch(`${API_BASE}/list`, { cache: 'no-store' })
       const listJson = await listResponse.json()
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
