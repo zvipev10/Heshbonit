@@ -1,10 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
+import { put } from '@vercel/blob/client'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/invoices/upload'
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/upload', '') ?? '/api/invoices'
 const GMAIL_API_BASE = import.meta.env.VITE_GMAIL_API_URL ?? '/api/gmail'
 const VAT_RATE = 0.18
+const BLOB_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+const ALLOWED_UPLOAD_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+
+const getUploadContentType = (file) => {
+  if (file.type) return file.type
+
+  const lowerName = file.name.toLowerCase()
+  if (lowerName.endsWith('.pdf')) return 'application/pdf'
+  if (lowerName.endsWith('.png')) return 'image/png'
+  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg'
+  if (lowerName.endsWith('.webp')) return 'image/webp'
+  return 'application/octet-stream'
+}
 
 function App() {
   const [processing, setProcessing] = useState(false)
@@ -223,55 +237,107 @@ function App() {
     setSelectedRows(new Set())
     setError(null)
 
-    const formData = new FormData()
-    selectedFiles.forEach(file => formData.append('invoices', file))
     const fileUrls = selectedFiles.map(file => registerBlobUrl(URL.createObjectURL(file)))
 
     try {
-      const response = await fetch(API_URL, { method: 'POST', body: formData })
-      const json = await response.json()
+      const results = []
 
-      if (!response.ok || !json.success) {
-        throw new Error(json.error || 'שגיאה בעיבוד החשבוניות')
-      }
+      for (const [i, file] of selectedFiles.entries()) {
+        try {
+          const contentType = getUploadContentType(file)
 
-      const results = json.results.map((r, i) => {
-        if (!r.success) {
-          return {
+          if (file.size > BLOB_UPLOAD_MAX_BYTES) {
+            throw new Error('הקובץ גדול מדי')
+          }
+
+          if (!ALLOWED_UPLOAD_TYPES.has(contentType)) {
+            throw new Error('סוג קובץ לא נתמך')
+          }
+
+          const tokenResponse = await fetch(`${API_BASE}/blob-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType,
+              size: file.size,
+            }),
+          })
+          const tokenJson = await tokenResponse.json().catch(() => null)
+
+          if (!tokenResponse.ok || !tokenJson?.success) {
+            throw new Error(tokenJson?.error || 'Failed to prepare file upload')
+          }
+
+          const blob = await put(tokenJson.pathname, file, {
+            access: 'public',
+            token: tokenJson.token,
+            contentType,
+            multipart: true,
+          })
+
+          const processResponse = await fetch(`${API_BASE}/process-blob`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: blob.url,
+              filename: file.name,
+              mimeType: contentType || blob.contentType || 'application/octet-stream',
+            }),
+          })
+          const processJson = await processResponse.json().catch(() => null)
+
+          if (!processResponse.ok || !processJson?.success) {
+            throw new Error(processJson?.error || 'Failed to process uploaded file')
+          }
+
+          const r = processJson.result
+          if (!r?.success) {
+            results.push({
+              rowKey: createLocalRowKey(),
+              failed: true,
+              fileName: r?.filename || file.name,
+              fileUrl: fileUrls[i] ?? null,
+              error: r?.error || 'Failed to process uploaded file',
+            })
+            continue
+          }
+
+          const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+          const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
+
+          results.push({
+            rowKey: typeof r.id === 'number' ? `db:${r.id}` : createLocalRowKey(),
+            id: typeof r.id === 'number' ? r.id : null,
+            failed: false,
+            fileName: r.filename,
+            fileUrl: typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (fileUrls[i] ?? null),
+            fileData: r.fileData,
+            mimeType: r.mimeType,
+            supplier: vendorName ?? '—',
+            date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
+            payment: totalWithoutVat,
+            vat,
+            total: totalWithVat,
+            printed: 'לא',
+            confidence,
+            morningCategoryId: morningCategoryId || null,
+            morningCategoryName: morningCategoryName || null,
+            morningCategoryCode: morningCategoryCode ?? null,
+            isStoredRecord: typeof r.id === 'number',
+            isDirty: typeof r.id !== 'number',
+            source: 'upload',
+          })
+        } catch (fileError) {
+          results.push({
             rowKey: createLocalRowKey(),
             failed: true,
-            fileName: r.filename,
+            fileName: file.name,
             fileUrl: fileUrls[i] ?? null,
-            error: r.error,
-          }
+            error: fileError instanceof Error ? fileError.message : 'Failed to process uploaded file',
+          })
         }
-
-        const { vendorName, date, totalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
-        const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
-
-        return {
-          rowKey: typeof r.id === 'number' ? `db:${r.id}` : createLocalRowKey(),
-          id: typeof r.id === 'number' ? r.id : null,
-          failed: false,
-          fileName: r.filename,
-          fileUrl: typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (fileUrls[i] ?? null),
-          fileData: r.fileData,
-          mimeType: r.mimeType,
-          supplier: vendorName ?? '—',
-          date: date ? new Date(date).toLocaleDateString('he-IL') : '—',
-          payment: totalWithoutVat,
-          vat,
-          total: totalWithVat,
-          printed: 'לא',
-          confidence,
-          morningCategoryId: morningCategoryId || null,
-          morningCategoryName: morningCategoryName || null,
-          morningCategoryCode: morningCategoryCode ?? null,
-          isStoredRecord: typeof r.id === 'number',
-          isDirty: typeof r.id !== 'number',
-          source: 'upload',
-        }
-      })
+      }
 
       setResult(prev => sortResultsByDateAsc([...prev, ...results]))
     } catch (err) {
