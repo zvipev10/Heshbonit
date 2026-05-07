@@ -8,6 +8,8 @@ const GMAIL_API_BASE = import.meta.env.VITE_GMAIL_API_URL ?? '/api/gmail'
 const VAT_RATE = 0.18
 const BLOB_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
 const ALLOWED_UPLOAD_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+const TAB_PENDING = 'pending'
+const TAB_APPROVED = 'approved'
 
 const getUploadContentType = (file) => {
   if (file.type) return file.type
@@ -25,6 +27,7 @@ function App() {
   const [result, setResult] = useState([])
   const [error, setError] = useState(null)
   const [duplicateNotice, setDuplicateNotice] = useState(null)
+  const [activeTab, setActiveTab] = useState(TAB_PENDING)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
@@ -180,6 +183,7 @@ function App() {
       total: inv.totalWithVat,
       originalTotalWithVat: inv.originalTotalWithVat ?? inv.totalWithVat,
       printed: inv.printed || 'לא',
+      status: inv.status || TAB_APPROVED,
       fileName: inv.fileName,
       isStoredRecord: true,
       isDirty: false,
@@ -191,28 +195,39 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    const loadDataFromDatabase = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/list`, { cache: 'no-store' })
-        const json = await response.json().catch(() => null)
-        if (!response.ok || !json?.success) {
-          throw new Error(json?.error || 'Failed to load data from database')
-        }
-        if (json.success && json.invoices) {
-          const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-          setResult(sortResultsByDateAsc(mappedInvoices))
-        }
-      } catch (err) {
-        console.error('Failed to load data from database:', err)
-        setError(err.message)
-      } finally {
-        setDbLoaded(true)
+  const loadDataFromDatabase = async (status = activeTab) => {
+    try {
+      const response = await fetch(`${API_BASE}/list?status=${encodeURIComponent(status)}`, { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || 'Failed to load data from database')
       }
+      if (json.success && json.invoices) {
+        const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
+        setResult(sortResultsByDateAsc(mappedInvoices))
+      }
+    } catch (err) {
+      console.error('Failed to load data from database:', err)
+      setError(err.message)
+    } finally {
+      setDbLoaded(true)
     }
+  }
 
-    loadDataFromDatabase()
+  useEffect(() => {
+    loadDataFromDatabase(TAB_PENDING)
   }, [])
+
+  const openTab = (status) => {
+    setActiveTab(status)
+    setSelectedRows(new Set())
+    setEditingCell(null)
+    closeRowMenu()
+    setError(null)
+    setDuplicateNotice(null)
+    setGmailSummary(null)
+    loadDataFromDatabase(status)
+  }
 
   useEffect(() => {
     const loadMorningCategories = async () => {
@@ -370,6 +385,7 @@ function App() {
             total: totalWithVat,
             originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
             printed: 'לא',
+            status: TAB_PENDING,
             confidence,
             morningCategoryId: morningCategoryId || null,
             morningCategoryName: morningCategoryName || null,
@@ -475,6 +491,7 @@ function App() {
           total: totalWithVat,
           originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
           printed: 'לא',
+          status: TAB_PENDING,
           confidence,
           morningCategoryId: morningCategoryId || null,
           morningCategoryName: morningCategoryName || null,
@@ -558,6 +575,7 @@ function App() {
       total: totalWithVat,
       originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
       printed: 'לא',
+      status: TAB_PENDING,
       confidence,
       morningCategoryId: morningCategoryId || null,
       morningCategoryName: morningCategoryName || null,
@@ -774,6 +792,40 @@ function App() {
     }
   }
 
+  const handleApproveRows = async (rowKeys = selectedRows) => {
+    const rowsToApprove = result.filter(row => rowKeys.has(row.rowKey) && row.status === TAB_PENDING && typeof row.id === 'number' && !row.failed)
+
+    if (rowsToApprove.length === 0) {
+      setError('בחר חשבוניות לאישור')
+      return
+    }
+
+    setError(null)
+
+    try {
+      const response = await fetch(`${API_BASE}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds: rowsToApprove.map(row => row.id) }),
+      })
+      const json = await response.json().catch(() => null)
+
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || 'אישור החשבוניות נכשל')
+      }
+
+      setResult(prev => prev.filter(row => !rowsToApprove.some(approved => approved.rowKey === row.rowKey)))
+      setSelectedRows(prev => {
+        const next = new Set(prev)
+        rowsToApprove.forEach(row => next.delete(row.rowKey))
+        return next
+      })
+      closeRowMenu()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const updateRowValue = (index, field, value) => {
     setResult(prev => {
       const updated = [...prev]
@@ -940,6 +992,7 @@ function App() {
           totalWithoutVat: res.payment,
           vat: res.vat,
           printed: res.printed || 'לא',
+          status: res.status || activeTab,
           morningCategoryId: res.morningCategoryId || null,
           morningCategoryName: res.morningCategoryName || null,
           morningCategoryCode: res.morningCategoryCode ?? null,
@@ -950,7 +1003,7 @@ function App() {
       const response = await fetch(`${API_BASE}/save-batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoices: invoicesToSave }),
+        body: JSON.stringify({ invoices: invoicesToSave, status: activeTab }),
       })
 
       const json = await response.json()
@@ -958,7 +1011,7 @@ function App() {
         throw new Error(json.error || 'Failed to save to database')
       }
 
-      const listResponse = await fetch(`${API_BASE}/list`, { cache: 'no-store' })
+      const listResponse = await fetch(`${API_BASE}/list?status=${encodeURIComponent(activeTab)}`, { cache: 'no-store' })
       const listJson = await listResponse.json()
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
@@ -998,35 +1051,60 @@ function App() {
         </div>
       </header>
 
-      <section className="upload-section">
-        <input ref={uploadInputRef} type="file" onChange={handleFileChange} accept="image/*,.pdf" multiple id="upload-input" />
-        <input ref={cameraInputRef} type="file" onChange={handleFileChange} accept="image/*" capture="environment" id="camera-input" />
+      <div className="invoice-tabs">
+        <button
+          type="button"
+          className={`invoice-tab ${activeTab === TAB_PENDING ? 'invoice-tab-active' : ''}`}
+          onClick={() => openTab(TAB_PENDING)}
+        >
+          חשבוניות חדשות
+        </button>
+        <button
+          type="button"
+          className={`invoice-tab ${activeTab === TAB_APPROVED ? 'invoice-tab-active' : ''}`}
+          onClick={() => openTab(TAB_APPROVED)}
+        >
+          חשבוניות מאושרות
+        </button>
+      </div>
 
-        <div className="upload-panel-copy">
-          <p className="upload-panel-text">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
-        </div>
+      {activeTab === TAB_PENDING && (
+        <section className="upload-section">
+          <input ref={uploadInputRef} type="file" onChange={handleFileChange} accept="image/*,.pdf" multiple id="upload-input" />
+          <input ref={cameraInputRef} type="file" onChange={handleFileChange} accept="image/*" capture="environment" id="camera-input" />
 
-        <div className="upload-actions upload-actions-primary">
-          <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
-            {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
-          </button>
-          <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
-            צלם חשבונית
-          </button>
-          <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
-            {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
-          </button>
-          <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
-            {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
-          </button>
-        </div>
-
-        {duplicateNotice && (
-          <div className="duplicate-notice">
-            <p>{duplicateNotice}</p>
+          <div className="upload-panel-copy">
+            <p className="upload-panel-text">העלה תמונה או PDF של חשבונית או סנכרן Gmail כדי לטעון חשבוניות מתויגות</p>
           </div>
-        )}
-      </section>
+
+          <div className="upload-actions upload-actions-primary">
+            <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
+              {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
+            </button>
+            <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
+              צלם חשבונית
+            </button>
+            <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
+              {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
+            </button>
+            <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
+              {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
+            </button>
+          </div>
+
+          {duplicateNotice && (
+            <div className="duplicate-notice">
+              <p>{duplicateNotice}</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === TAB_APPROVED && (
+        <div className="approved-tab-note">
+          ניהול חשבוניות מאושרות
+        </div>
+      )}
 
       {processing && (
         <div className="processing">
@@ -1081,6 +1159,9 @@ function App() {
             <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={!hasSelectedRows}>עם מע"מ</button>
             <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
             <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={!hasSelectedRows}>שחזר סכום</button>
+            {activeTab === TAB_PENDING && (
+              <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={!hasSelectedRows}>אשר</button>
+            )}
             <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
               {morningSending ? 'Sending...' : 'Send to Morning'}
             </button>
@@ -1223,6 +1304,14 @@ function App() {
                               >
                                 שחזר סכום
                               </button>
+                              {activeTab === TAB_PENDING && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveRows(rowKeySet(res.rowKey))}
+                                >
+                                  אשר
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 disabled={!res.isStoredRecord || typeof res.id !== 'number' || morningSending}

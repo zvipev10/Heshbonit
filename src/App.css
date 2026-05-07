@@ -64,6 +64,43 @@ body {
   height: 24px;
 }
 
+.invoice-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 18px;
+}
+
+.invoice-tab {
+  min-width: 180px;
+  height: 44px;
+  border: 1px solid #d7def4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #536079;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.invoice-tab:hover {
+  border-color: #9aabff;
+  color: #4257dc;
+}
+
+.invoice-tab-active {
+  background: #4f67f6;
+  color: #ffffff;
+  border-color: #4f67f6;
+}
+
+.approved-tab-note {
+  margin: 0 auto 24px;
+  text-align: center;
+  color: #667085;
+  font-weight: 600;
+}
+
 p {
   text-align: center;
   color: #4b5563;
@@ -433,6 +470,11 @@ input[type="file"] {
 
 .row-menu .row-menu-delete {
   color: #b91c1c;
+}
+
+.bulk-action-approve {
+  background: #ecfdf3;
+  color: #047857;
 }
 
 .row-fraction-options {
