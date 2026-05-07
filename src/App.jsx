@@ -664,33 +664,126 @@ function App() {
 
   const rowKeySet = (rowKey) => new Set([rowKey])
 
-  const handleCopyWithoutVat = (rowKeys = selectedRows) => {
-    setResult(prev => prev.map((res) => {
-      if (!rowKeys.has(res.rowKey) || res.failed) return res
-      return { ...res, payment: res.total, vat: 0, isDirty: true }
-    }))
+  const dateToISO = (hebrewDate) => {
+    if (!hebrewDate || hebrewDate === '—' || hebrewDate === 'â€”') return null
+    const parts = String(hebrewDate).split('.')
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0')
+      const month = parts[1].padStart(2, '0')
+      const year = parts[2]
+      return `${year}-${month}-${day}`
+    }
+    return hebrewDate
   }
 
-  const handleCalculateWithVat = (rowKeys = selectedRows) => {
-    setResult(prev => prev.map((res) => {
-      if (!rowKeys.has(res.rowKey) || res.failed) return res
+  const normalizeNumber = (value) => {
+    if (value === '' || value === null || value === undefined) return null
+    const numeric = typeof value === 'number' ? value : parseFloat(value)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+
+  const toInvoicePatchFields = (row) => ({
+    vendorName: row.supplier === '—' || row.supplier === 'â€”' ? null : row.supplier,
+    date: dateToISO(row.date),
+    totalWithVat: normalizeNumber(row.total),
+    totalWithoutVat: normalizeNumber(row.payment),
+    vat: normalizeNumber(row.vat),
+    printed: row.printed || 'לא',
+    morningCategoryId: row.morningCategoryId || null,
+    morningCategoryName: row.morningCategoryName || null,
+    morningCategoryCode: row.morningCategoryCode ?? null,
+  })
+
+  const buildChangedInvoicePatch = (before, after) => {
+    const current = toInvoicePatchFields(before)
+    const next = toInvoicePatchFields(after)
+    return Object.fromEntries(
+      Object.entries(next).filter(([key, value]) => current[key] !== value)
+    )
+  }
+
+  const patchInvoice = async (id, patch) => {
+    const response = await fetch(`${API_BASE}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    const json = await response.json().catch(() => null)
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || 'Failed to update invoice')
+    }
+  }
+
+  const applyRowUpdates = async (rowKeys, transformRow) => {
+    const patches = []
+    const nextResult = result.map((row) => {
+      if (!rowKeys.has(row.rowKey) || row.failed) return row
+      const updated = { ...transformRow(row), isDirty: false }
+      if (row.isStoredRecord && typeof row.id === 'number') {
+        const patch = buildChangedInvoicePatch(row, updated)
+        if (Object.keys(patch).length > 0) {
+          patches.push({ rowKey: row.rowKey, id: row.id, patch })
+        }
+      }
+      return updated
+    })
+
+    if (patches.length === 0) {
+      setResult(nextResult)
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    setResult(nextResult)
+
+    try {
+      await Promise.all(patches.map(({ id, patch }) => patchInvoice(id, patch)))
+    } catch (err) {
+      setError(err.message)
+      const failedKeys = new Set(patches.map(({ rowKey }) => rowKey))
+      setResult(prev => prev.map(row => failedKeys.has(row.rowKey) ? { ...row, isDirty: true } : row))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateRowValueInRow = (row, field, value) => {
+    const updated = { ...row }
+    if (field === 'supplier') {
+      updated.supplier = value === '' ? '—' : value
+    } else if (field === 'morningCategoryId') {
+      const selected = morningCategories.find(category => category.id === value)
+      updated.morningCategoryId = selected?.id || null
+      updated.morningCategoryName = selected?.name || selected?.title || null
+      updated.morningCategoryCode = selected?.code ?? null
+    } else if (field === 'payment' || field === 'vat' || field === 'total') {
+      updated[field] = value === '' || value === null ? null : parseFloat(value)
+    } else if (field === 'date') {
+      updated.date = value
+    }
+    return updated
+  }
+
+  const handleCopyWithoutVat = async (rowKeys = selectedRows) => {
+    await applyRowUpdates(rowKeys, (res) => ({ ...res, payment: res.total, vat: 0 }))
+  }
+
+  const handleCalculateWithVat = async (rowKeys = selectedRows) => {
+    await applyRowUpdates(rowKeys, (res) => {
       const total = typeof res.total === 'number' ? res.total : parseFloat(res.total)
-      if (!Number.isFinite(total)) return res
+      if (!Number.isFinite(total)) return { ...res }
       const payment = roundMoney(total / (1 + VAT_RATE))
-      return { ...res, payment, vat: roundMoney(total - payment), isDirty: true }
-    }))
+      return { ...res, payment, vat: roundMoney(total - payment) }
+    })
   }
 
-  const handleMarkPrinted = (rowKeys = selectedRows) => {
-    setResult(prev => prev.map((res) => {
-      if (!rowKeys.has(res.rowKey) || res.failed) return res
-      return { ...res, printed: 'כן', isDirty: true }
-    }))
+  const handleMarkPrinted = async (rowKeys = selectedRows) => {
+    await applyRowUpdates(rowKeys, (res) => ({ ...res, printed: 'כן' }))
   }
 
-  const handleApplyFraction = (fraction, rowKeys = selectedRows) => {
-    setResult(prev => prev.map((res) => {
-      if (!rowKeys.has(res.rowKey) || res.failed) return res
+  const handleApplyFraction = async (fraction, rowKeys = selectedRows) => {
+    await applyRowUpdates(rowKeys, (res) => {
       const fractions = { '2/3': 2 / 3, '1/2': 0.5, '1/3': 1 / 3, '1/4': 0.25 }
       const multiplier = fractions[fraction] || 1
       return {
@@ -698,26 +791,36 @@ function App() {
         payment: res.payment != null ? res.payment * multiplier : null,
         vat: res.vat != null ? res.vat * multiplier : null,
         total: res.total != null ? res.total * multiplier : null,
-        isDirty: true,
       }
-    }))
+    })
   }
 
-  const handleRestoreOriginalTotal = (rowKeys = selectedRows) => {
-    setResult(prev => prev.map((res) => {
-      if (!rowKeys.has(res.rowKey) || res.failed) return res
+  const handleRestoreOriginalTotal = async (rowKeys = selectedRows) => {
+    await applyRowUpdates(rowKeys, (res) => {
       const originalTotal = typeof res.originalTotalWithVat === 'number'
         ? res.originalTotalWithVat
         : parseFloat(res.originalTotalWithVat)
-      if (!Number.isFinite(originalTotal)) return res
-      return { ...res, total: originalTotal, isDirty: true }
-    }))
+      if (!Number.isFinite(originalTotal)) return { ...res }
+      return { ...res, total: originalTotal }
+    })
   }
 
-  const handleDeleteSelected = (rowKeys = selectedRows) => {
-    setResult(prev => {
-      const removed = prev.filter(row => rowKeys.has(row.rowKey))
-      const kept = prev.filter(row => !rowKeys.has(row.rowKey))
+  const handleDeleteSelected = async (rowKeys = selectedRows) => {
+    const removed = result.filter(row => rowKeys.has(row.rowKey))
+    const kept = result.filter(row => !rowKeys.has(row.rowKey))
+    const storedRows = removed.filter(row => row.isStoredRecord && typeof row.id === 'number')
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      await Promise.all(storedRows.map(async (row) => {
+        const response = await fetch(`${API_BASE}/${row.id}`, { method: 'DELETE' })
+        const json = await response.json().catch(() => null)
+        if (!response.ok || !json?.success) {
+          throw new Error(json?.error || 'Failed to delete invoice')
+        }
+      }))
 
       removed.forEach(res => {
         if (res.fileUrl && !kept.some(row => row.fileUrl === res.fileUrl)) {
@@ -725,8 +828,13 @@ function App() {
         }
       })
 
-      return kept
-    })
+      setResult(kept)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+
     if (editingCell?.rowKey && rowKeys.has(editingCell.rowKey)) {
       setEditingCell(null)
     }
@@ -836,20 +944,17 @@ function App() {
   const updateRowValue = (index, field, value) => {
     setResult(prev => {
       const updated = [...prev]
-      if (field === 'supplier') {
-        updated[index].supplier = value === '' ? '—' : value
-      } else if (field === 'morningCategoryId') {
-        const selected = morningCategories.find(category => category.id === value)
-        updated[index].morningCategoryId = selected?.id || null
-        updated[index].morningCategoryName = selected?.name || selected?.title || null
-        updated[index].morningCategoryCode = selected?.code ?? null
-      } else if (field === 'payment' || field === 'vat' || field === 'total') {
-        updated[index][field] = value === '' || value === null ? null : parseFloat(value)
-      } else if (field === 'date') {
-        updated[index].date = value
-      }
-      updated[index].isDirty = true
+      updated[index] = { ...updateRowValueInRow(updated[index], field, value), isDirty: true }
       return updated
+    })
+  }
+
+  const persistEditedValue = async (rowIndex, field, value) => {
+    const row = result[rowIndex]
+    if (!row) return
+    await applyRowUpdates(rowKeySet(row.rowKey), (currentRow) => {
+      const sourceRow = currentRow.rowKey === row.rowKey ? currentRow : row
+      return updateRowValueInRow(sourceRow, field, value)
     })
   }
 
@@ -875,9 +980,16 @@ function App() {
           type={inputType}
           value={inputValue}
           onChange={(e) => updateRowValue(rowIndex, field, e.target.value)}
-          onBlur={() => setEditingCell(null)}
+          onBlur={(e) => {
+            setEditingCell(null)
+            persistEditedValue(rowIndex, field, e.target.value)
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null)
+            if (e.key === 'Enter') {
+              setEditingCell(null)
+              persistEditedValue(rowIndex, field, e.currentTarget.value)
+            }
+            if (e.key === 'Escape') setEditingCell(null)
           }}
           className="cell-input"
           placeholder={inputType === 'number' ? '0.00' : ''}
@@ -918,6 +1030,7 @@ function App() {
           onChange={(e) => {
             updateRowValue(rowIndex, 'morningCategoryId', e.target.value)
             setEditingCell(null)
+            persistEditedValue(rowIndex, 'morningCategoryId', e.target.value)
           }}
           onBlur={() => setEditingCell(null)}
           className="category-select"
@@ -1094,9 +1207,6 @@ function App() {
             <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
               {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
             </button>
-            <button type="button" onClick={handleSaveToDatabase} className="upload-button" disabled={saving}>
-              {saving ? 'שומר...' : 'עדכן בסיס נתונים'}
-            </button>
           </div>
 
           {duplicateNotice && (
@@ -1156,18 +1266,21 @@ function App() {
 
           <div className="bulk-actions">
             <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
-            <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows}>ללא מע"מ</button>
-            <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={!hasSelectedRows}>עם מע"מ</button>
-            <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={!hasSelectedRows}>מודפס</button>
-            <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={!hasSelectedRows}>שחזר סכום</button>
+            <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={!hasSelectedRows || saving}>ללא מע"מ</button>
+            <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={!hasSelectedRows || saving}>עם מע"מ</button>
+            <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={!hasSelectedRows || saving}>מודפס</button>
+            <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={!hasSelectedRows || saving}>שחזר סכום</button>
             {activeTab === TAB_PENDING && (
-              <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={!hasSelectedRows}>אשר</button>
+              <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={!hasSelectedRows || saving}>אשר</button>
             )}
-            <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending}>
+            <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
               {morningSending ? 'Sending...' : 'Send to Morning'}
             </button>
             <div className="bulk-action-dropdown-wrapper">
-              <select onChange={(e) => e.target.value && handleApplyFraction(e.target.value)} defaultValue="" className="bulk-action-dropdown" disabled={!hasSelectedRows}>
+              <select onChange={(e) => {
+                if (e.target.value) handleApplyFraction(e.target.value)
+                e.target.value = ''
+              }} defaultValue="" className="bulk-action-dropdown" disabled={!hasSelectedRows || saving}>
                 <option value="">סכום חלקי</option>
                 <option value="2/3">2/3</option>
                 <option value="1/2">1/2</option>
@@ -1175,7 +1288,7 @@ function App() {
                 <option value="1/4">1/4</option>
               </select>
             </div>
-            <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows}>מחק</button>
+            <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={!hasSelectedRows || saving}>מחק</button>
           </div>
 
           <div className="table-scroll">
