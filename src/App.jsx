@@ -196,7 +196,9 @@ function App() {
   }
 
   const loadDataFromDatabase = async (status = activeTab) => {
+    const tabLabel = status === TAB_PENDING ? 'חדשות' : 'מאושרות'
     try {
+      setError(null)
       const response = await fetch(`${API_BASE}/list?status=${encodeURIComponent(status)}`, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.success) {
@@ -208,7 +210,12 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to load data from database:', err)
-      setError(err.message)
+      const message = err instanceof Error ? err.message : String(err)
+      setError(
+        message === 'Load failed'
+          ? `טעינת חשבוניות ${tabLabel} נכשלה. בדוק חיבור ונסה שוב.`
+          : message,
+      )
     } finally {
       setDbLoaded(true)
     }
@@ -1098,12 +1105,6 @@ function App() {
             </div>
           )}
         </section>
-      )}
-
-      {activeTab === TAB_APPROVED && (
-        <div className="approved-tab-note">
-          ניהול חשבוניות מאושרות
-        </div>
       )}
 
       {processing && (
