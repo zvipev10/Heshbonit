@@ -698,6 +698,9 @@ function App() {
       top,
       left,
       maxHeight,
+      width: menuWidth,
+      minWidth: menuWidth,
+      maxWidth: menuWidth,
     })
     setOpenRowMenuKey(rowKey)
     setOpenFractionMenuKey(null)

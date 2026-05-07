@@ -430,6 +430,9 @@ input[type="file"] {
   position: fixed;
   z-index: 1000;
   width: 152px;
+  min-width: 152px;
+  max-width: 152px;
+  box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: #ffffff;
