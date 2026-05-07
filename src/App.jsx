@@ -1333,20 +1333,22 @@ function App() {
             </div>
           )}
 
-          <div className="summary-cards">
-            <div className="summary-card summary-card-before-vat">
-              <span className="summary-label">לפני מע"מ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
+          {activeTab === TAB_APPROVED && (
+            <div className="summary-cards">
+              <div className="summary-card summary-card-before-vat">
+                <span className="summary-label">לפני מע"מ</span>
+                <strong>₪{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
+              </div>
+              <div className="summary-card summary-card-vat">
+                <span className="summary-label">מע"מ</span>
+                <strong>₪{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
+              </div>
+              <div className="summary-card summary-card-total">
+                <span className="summary-label">סה"כ</span>
+                <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
+              </div>
             </div>
-            <div className="summary-card summary-card-vat">
-              <span className="summary-label">מע"מ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
-            </div>
-            <div className="summary-card summary-card-total">
-              <span className="summary-label">סה"כ</span>
-              <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
-            </div>
-          </div>
+          )}
 
           {hasSelectedRows && (
             <div className="bulk-actions">
