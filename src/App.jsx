@@ -32,6 +32,7 @@ function App() {
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
   const [openRowMenuKey, setOpenRowMenuKey] = useState(null)
+  const [rowMenuPosition, setRowMenuPosition] = useState(null)
   const [openFractionMenuKey, setOpenFractionMenuKey] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
@@ -286,11 +287,17 @@ function App() {
       if (event.key === 'Escape') closeRowMenu()
     }
 
+    const handleViewportChange = () => closeRowMenu()
+
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('scroll', handleViewportChange, true)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('scroll', handleViewportChange, true)
     }
   }, [openRowMenuKey])
 
@@ -659,6 +666,28 @@ function App() {
 
   const closeRowMenu = () => {
     setOpenRowMenuKey(null)
+    setRowMenuPosition(null)
+    setOpenFractionMenuKey(null)
+  }
+
+  const openRowMenu = (rowKey, event) => {
+    if (openRowMenuKey === rowKey) {
+      closeRowMenu()
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const menuWidth = 178
+    const left = Math.min(
+      Math.max(8, rect.right - menuWidth),
+      window.innerWidth - menuWidth - 8,
+    )
+
+    setRowMenuPosition({
+      top: rect.bottom + 6,
+      left,
+    })
+    setOpenRowMenuKey(rowKey)
     setOpenFractionMenuKey(null)
   }
 
@@ -1371,17 +1400,14 @@ function App() {
                           <button
                             type="button"
                             className="row-menu-button"
-                            onClick={() => {
-                              setOpenRowMenuKey(openRowMenuKey === res.rowKey ? null : res.rowKey)
-                              setOpenFractionMenuKey(null)
-                            }}
+                            onClick={(event) => openRowMenu(res.rowKey, event)}
                             aria-label="פעולות לשורה"
                             title="פעולות"
                           >
                             ⋮
                           </button>
                           {openRowMenuKey === res.rowKey && (
-                            <div className="row-menu">
+                            <div className="row-menu" style={rowMenuPosition || undefined}>
                               <button
                                 type="button"
                                 onClick={() => {
