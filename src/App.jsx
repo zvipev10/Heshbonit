@@ -677,15 +677,27 @@ function App() {
     }
 
     const rect = event.currentTarget.getBoundingClientRect()
-    const menuWidth = 178
+    const menuWidth = 152
+    const viewportGap = 8
+    const preferredMaxHeight = Math.min(320, window.innerHeight - viewportGap * 2)
+    const spaceBelow = window.innerHeight - rect.bottom - viewportGap
+    const spaceAbove = rect.top - viewportGap
+    const openUp = spaceBelow < 250 && spaceAbove > spaceBelow
+    const top = openUp
+      ? Math.max(viewportGap, rect.top - preferredMaxHeight - 6)
+      : rect.bottom + 6
+    const maxHeight = openUp
+      ? Math.min(preferredMaxHeight, Math.max(120, rect.top - viewportGap - 6))
+      : Math.min(preferredMaxHeight, Math.max(120, window.innerHeight - top - viewportGap))
     const left = Math.min(
-      Math.max(8, rect.right - menuWidth),
-      window.innerWidth - menuWidth - 8,
+      Math.max(viewportGap, rect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportGap,
     )
 
     setRowMenuPosition({
-      top: rect.bottom + 6,
+      top,
       left,
+      maxHeight,
     })
     setOpenRowMenuKey(rowKey)
     setOpenFractionMenuKey(null)
@@ -741,6 +753,34 @@ function App() {
     if (!response.ok || !json?.success) {
       throw new Error(json?.error || 'Failed to update invoice')
     }
+  }
+
+  const buildEditedFieldPatch = (row, field) => {
+    if (field === 'supplier') {
+      return {
+        vendorName: row.supplier === '—' || row.supplier === 'â€”' || row.supplier === '' ? null : row.supplier,
+      }
+    }
+    if (field === 'date') {
+      return { date: dateToISO(row.date) }
+    }
+    if (field === 'payment') {
+      return { totalWithoutVat: normalizeNumber(row.payment) }
+    }
+    if (field === 'vat') {
+      return { vat: normalizeNumber(row.vat) }
+    }
+    if (field === 'total') {
+      return { totalWithVat: normalizeNumber(row.total) }
+    }
+    if (field === 'morningCategoryId') {
+      return {
+        morningCategoryId: row.morningCategoryId || null,
+        morningCategoryName: row.morningCategoryName || null,
+        morningCategoryCode: row.morningCategoryCode ?? null,
+      }
+    }
+    return {}
   }
 
   const applyRowUpdates = async (rowKeys, transformRow) => {
@@ -981,10 +1021,23 @@ function App() {
   const persistEditedValue = async (rowIndex, field, value) => {
     const row = result[rowIndex]
     if (!row) return
-    await applyRowUpdates(rowKeySet(row.rowKey), (currentRow) => {
-      const sourceRow = currentRow.rowKey === row.rowKey ? currentRow : row
-      return updateRowValueInRow(sourceRow, field, value)
-    })
+    const updatedRow = { ...updateRowValueInRow(row, field, value), isDirty: false }
+    const patch = buildEditedFieldPatch(updatedRow, field)
+
+    setResult(prev => prev.map(item => item.rowKey === row.rowKey ? updatedRow : item))
+
+    if (!row.isStoredRecord || typeof row.id !== 'number' || Object.keys(patch).length === 0) return
+
+    setSaving(true)
+    setError(null)
+    try {
+      await patchInvoice(row.id, patch)
+    } catch (err) {
+      setError(err.message)
+      setResult(prev => prev.map(item => item.rowKey === row.rowKey ? { ...item, isDirty: true } : item))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const getRowClassName = (row) => {
