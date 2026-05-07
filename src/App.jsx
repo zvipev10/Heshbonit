@@ -683,11 +683,9 @@ function App() {
     const spaceBelow = window.innerHeight - rect.bottom - viewportGap
     const spaceAbove = rect.top - viewportGap
     const openUp = spaceBelow < 250 && spaceAbove > spaceBelow
-    const top = openUp
-      ? Math.max(viewportGap, rect.top - preferredMaxHeight - 6)
-      : rect.bottom + 6
+    const top = openUp ? rect.top - 6 : rect.bottom + 6
     const maxHeight = openUp
-      ? Math.min(preferredMaxHeight, Math.max(120, rect.top - viewportGap - 6))
+      ? Math.min(preferredMaxHeight, Math.max(120, spaceAbove - 6))
       : Math.min(preferredMaxHeight, Math.max(120, window.innerHeight - top - viewportGap))
     const left = Math.min(
       Math.max(viewportGap, rect.right - menuWidth),
@@ -701,6 +699,7 @@ function App() {
       width: menuWidth,
       minWidth: menuWidth,
       maxWidth: menuWidth,
+      transform: openUp ? 'translateY(-100%)' : undefined,
     })
     setOpenRowMenuKey(rowKey)
     setOpenFractionMenuKey(null)
