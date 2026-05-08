@@ -31,9 +31,6 @@ function App() {
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
-  const [openRowMenuKey, setOpenRowMenuKey] = useState(null)
-  const [rowMenuPosition, setRowMenuPosition] = useState(null)
-  const [openFractionMenuKey, setOpenFractionMenuKey] = useState(null)
   const [gmailSummary, setGmailSummary] = useState(null)
   const [gmailLoading, setGmailLoading] = useState(false)
   const [morningSending, setMorningSending] = useState(false)
@@ -241,7 +238,6 @@ function App() {
     setActiveTab(status)
     setSelectedRows(new Set())
     setEditingCell(null)
-    closeRowMenu()
     setError(null)
     setDuplicateNotice(null)
     setGmailSummary(null)
@@ -285,32 +281,6 @@ function App() {
       createdBlobUrls.clear()
     }
   }, [])
-
-  useEffect(() => {
-    if (!openRowMenuKey) return
-
-    const handlePointerDown = (event) => {
-      if (event.target?.closest?.('.row-menu-wrapper')) return
-      if (event.target?.closest?.('.row-menu')) return
-      if (event.target?.closest?.('.row-menu-backdrop')) return
-      closeRowMenu()
-    }
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') closeRowMenu()
-    }
-
-    const handleViewportChange = () => closeRowMenu()
-
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('resize', handleViewportChange)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('resize', handleViewportChange)
-    }
-  }, [openRowMenuKey])
 
   const processFiles = async (selectedFiles) => {
     if (!selectedFiles.length) return
@@ -672,56 +642,6 @@ function App() {
     setSelectedRows(allSelected ? new Set() : new Set(result.map(row => row.rowKey)))
   }
 
-  const closeRowMenu = () => {
-    setOpenRowMenuKey(null)
-    setRowMenuPosition(null)
-    setOpenFractionMenuKey(null)
-  }
-
-  const openRowMenu = (rowKey, event) => {
-    if (openRowMenuKey === rowKey) {
-      closeRowMenu()
-      return
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect()
-    const visualViewport = window.visualViewport
-    const viewportLeft = visualViewport?.offsetLeft ?? 0
-    const viewportTop = visualViewport?.offsetTop ?? 0
-    const viewportWidth = visualViewport?.width ?? window.innerWidth
-    const viewportHeight = visualViewport?.height ?? window.innerHeight
-    const viewportRight = viewportLeft + viewportWidth
-    const viewportBottom = viewportTop + viewportHeight
-    const menuWidth = 168
-    const viewportGap = 8
-    const preferredMaxHeight = Math.min(320, viewportHeight - viewportGap * 2)
-    const spaceBelow = viewportBottom - rect.bottom - viewportGap
-    const spaceAbove = rect.top - viewportTop - viewportGap
-    const openUp = spaceBelow < 250 && spaceAbove > spaceBelow
-    const top = openUp ? rect.top - 6 : rect.bottom + 6
-    const maxHeight = openUp
-      ? Math.min(preferredMaxHeight, Math.max(120, spaceAbove - 6))
-      : Math.min(preferredMaxHeight, Math.max(120, viewportBottom - top - viewportGap))
-    const left = Math.min(
-      Math.max(viewportLeft + viewportGap, rect.right - menuWidth),
-      viewportRight - menuWidth - viewportGap,
-    )
-
-    setRowMenuPosition({
-      top,
-      left,
-      maxHeight,
-      width: menuWidth,
-      minWidth: menuWidth,
-      maxWidth: menuWidth,
-      transform: openUp ? 'translateY(-100%)' : undefined,
-    })
-    setOpenRowMenuKey(rowKey)
-    setOpenFractionMenuKey(null)
-  }
-
-  const rowKeySet = (rowKey) => new Set([rowKey])
-
   const dateToISO = (hebrewDate) => {
     if (!hebrewDate || hebrewDate === '—' || hebrewDate === 'â€”') return null
     const parts = String(hebrewDate).split('.')
@@ -930,7 +850,6 @@ function App() {
       rowKeys.forEach(rowKey => next.delete(rowKey))
       return next
     })
-    closeRowMenu()
   }
 
   const handleSendToMorning = async (rowKeys = selectedRows) => {
@@ -989,7 +908,6 @@ function App() {
       setError(err.message)
     } finally {
       setMorningSending(false)
-      closeRowMenu()
     }
   }
 
@@ -1021,7 +939,6 @@ function App() {
         rowsToApprove.forEach(row => next.delete(row.rowKey))
         return next
       })
-      closeRowMenu()
     } catch (err) {
       setError(err.message)
     }
@@ -1149,98 +1066,6 @@ function App() {
     )
   }
 
-  const renderRowMenuContent = (row) => {
-    if (!row) return null
-
-    const rowKeys = rowKeySet(row.rowKey)
-
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => {
-            handleCopyWithoutVat(rowKeys)
-            closeRowMenu()
-          }}
-        >
-          ללא מע"מ
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            handleCalculateWithVat(rowKeys)
-            closeRowMenu()
-          }}
-        >
-          עם מע"מ
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            handleMarkPrinted(rowKeys)
-            closeRowMenu()
-          }}
-        >
-          מודפס
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            handleRestoreOriginalTotal(rowKeys)
-            closeRowMenu()
-          }}
-        >
-          שחזר סכום
-        </button>
-        {activeTab === TAB_PENDING && (
-          <button
-            type="button"
-            onClick={() => handleApproveRows(rowKeys)}
-          >
-            אשר
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={!row.isStoredRecord || typeof row.id !== 'number' || morningSending}
-          onClick={() => handleSendToMorning(rowKeys)}
-        >
-          {morningSending ? 'Sending...' : 'Send to Morning'}
-        </button>
-        <button
-          type="button"
-          className="row-menu-fraction-trigger"
-          onClick={() => setOpenFractionMenuKey(openFractionMenuKey === row.rowKey ? null : row.rowKey)}
-        >
-          סכום חלקי
-        </button>
-        {openFractionMenuKey === row.rowKey && (
-          <div className="row-fraction-options">
-            {['2/3', '1/2', '1/3', '1/4'].map((fraction) => (
-              <button
-                key={fraction}
-                type="button"
-                onClick={() => {
-                  handleApplyFraction(fraction, rowKeys)
-                  closeRowMenu()
-                }}
-              >
-                {fraction}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          type="button"
-          className="row-menu-delete"
-          onClick={() => handleDeleteSelected(rowKeys)}
-        >
-          מחק
-        </button>
-      </>
-    )
-  }
-
   const renderBulkActions = () => (
     <div className="bulk-actions" role="toolbar" aria-label="פעולות על פריטים שנבחרו">
       <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
@@ -1342,15 +1167,6 @@ function App() {
               </svg>
             </a>
           )}
-          <button
-            type="button"
-            className="row-menu-button"
-            onClick={(event) => openRowMenu(res.rowKey, event)}
-            aria-label="פעולות לשורה"
-            title="פעולות"
-          >
-            ⋮
-          </button>
         </div>
       </article>
     )
@@ -1458,7 +1274,6 @@ function App() {
   const successResults = visibleResults.filter(r => !r.failed)
   const hasSelectedRows = selectedRows.size > 0
   const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
-  const activeRowMenuRow = openRowMenuKey ? result.find(row => row.rowKey === openRowMenuKey) : null
 
   return (
     <div className="container">
@@ -1592,7 +1407,7 @@ function App() {
                   <th>סה"כ</th>
                   <th>מודפס</th>
                   <th>מורנינג</th>
-                  <th>פעולות</th>
+                  <th>קובץ</th>
                 </tr>
               </thead>
               <tbody>
@@ -1649,25 +1464,6 @@ function App() {
                             </svg>
                           </a>
                         )}
-                        <div className="row-menu-wrapper">
-                          <button
-                            type="button"
-                            className="row-menu-button"
-                            onClick={(event) => openRowMenu(res.rowKey, event)}
-                            aria-label="פעולות לשורה"
-                            title="פעולות"
-                          >
-                            ⋮
-                          </button>
-                          {openRowMenuKey === res.rowKey && (
-                            <>
-                              <button type="button" className="row-menu-backdrop row-menu-desktop" aria-label="סגור פעולות" onClick={closeRowMenu} />
-                              <div className="row-menu row-menu-desktop" style={rowMenuPosition || undefined}>
-                                {renderRowMenuContent(res)}
-                              </div>
-                            </>
-                          )}
-                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1683,15 +1479,6 @@ function App() {
       )}
 
       {hasSelectedRows && renderBulkActions()}
-
-      {activeRowMenuRow && (
-        <>
-          <button type="button" className="row-menu-backdrop row-menu-mobile-backdrop" aria-label="סגור פעולות" onClick={closeRowMenu} />
-          <div className="row-menu row-menu-mobile" role="dialog" aria-label="פעולות לשורה">
-            {renderRowMenuContent(activeRowMenuRow)}
-          </div>
-        </>
-      )}
     </div>
   )
 }
