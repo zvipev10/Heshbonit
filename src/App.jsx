@@ -1081,14 +1081,6 @@ function App() {
       <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
       <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
       <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={saving}>עם מע"מ</button>
-      <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={saving}>מודפס</button>
-      <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={saving}>שחזר סכום</button>
-      {activeTab === TAB_PENDING && (
-        <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
-      )}
-      <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
-        {morningSending ? 'Sending...' : 'Send to Morning'}
-      </button>
       <div className="bulk-action-dropdown-wrapper">
         <select onChange={(e) => {
           if (e.target.value) handleApplyFraction(e.target.value)
@@ -1101,6 +1093,14 @@ function App() {
           <option value="1/4">1/4</option>
         </select>
       </div>
+      <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={saving}>מודפס</button>
+      <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={saving}>שחזר סכום</button>
+      {activeTab === TAB_PENDING && (
+        <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
+      )}
+      <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
+        {morningSending ? 'Sending...' : 'Send to Morning'}
+      </button>
       <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
     </div>
   )
