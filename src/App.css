@@ -429,9 +429,9 @@ input[type="file"] {
 .row-menu {
   position: fixed;
   z-index: 1000;
-  width: 152px;
-  min-width: 152px;
-  max-width: 152px;
+  width: 168px;
+  min-width: 168px;
+  max-width: 168px;
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -441,6 +441,15 @@ input[type="file"] {
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
   padding: 4px;
   text-align: right;
+}
+
+.row-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.row-menu::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .row-menu button {

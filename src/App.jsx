@@ -677,19 +677,26 @@ function App() {
     }
 
     const rect = event.currentTarget.getBoundingClientRect()
-    const menuWidth = 152
+    const visualViewport = window.visualViewport
+    const viewportLeft = visualViewport?.offsetLeft ?? 0
+    const viewportTop = visualViewport?.offsetTop ?? 0
+    const viewportWidth = visualViewport?.width ?? window.innerWidth
+    const viewportHeight = visualViewport?.height ?? window.innerHeight
+    const viewportRight = viewportLeft + viewportWidth
+    const viewportBottom = viewportTop + viewportHeight
+    const menuWidth = 168
     const viewportGap = 8
-    const preferredMaxHeight = Math.min(320, window.innerHeight - viewportGap * 2)
-    const spaceBelow = window.innerHeight - rect.bottom - viewportGap
-    const spaceAbove = rect.top - viewportGap
+    const preferredMaxHeight = Math.min(320, viewportHeight - viewportGap * 2)
+    const spaceBelow = viewportBottom - rect.bottom - viewportGap
+    const spaceAbove = rect.top - viewportTop - viewportGap
     const openUp = spaceBelow < 250 && spaceAbove > spaceBelow
     const top = openUp ? rect.top - 6 : rect.bottom + 6
     const maxHeight = openUp
       ? Math.min(preferredMaxHeight, Math.max(120, spaceAbove - 6))
-      : Math.min(preferredMaxHeight, Math.max(120, window.innerHeight - top - viewportGap))
+      : Math.min(preferredMaxHeight, Math.max(120, viewportBottom - top - viewportGap))
     const left = Math.min(
-      Math.max(viewportGap, rect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportGap,
+      Math.max(viewportLeft + viewportGap, rect.right - menuWidth),
+      viewportRight - menuWidth - viewportGap,
     )
 
     setRowMenuPosition({
