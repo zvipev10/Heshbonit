@@ -1273,6 +1273,97 @@ function App() {
     </div>
   )
 
+  const getResultIndexByRowKey = (rowKey) => result.findIndex(row => row.rowKey === rowKey)
+
+  const renderMobileInvoiceCard = (res, displayIndex) => {
+    const rowIndex = getResultIndexByRowKey(res.rowKey)
+
+    if (res.failed) {
+      return (
+        <article key={res.rowKey} className="invoice-card invoice-card-failed">
+          <div className="invoice-card-topline">
+            <span>#{displayIndex + 1}</span>
+            <input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} />
+          </div>
+          <p className="invoice-card-error">{res.fileName} — {res.error}</p>
+        </article>
+      )
+    }
+
+    return (
+      <article key={res.rowKey} className={`invoice-card ${getRowClassName(res)}`}>
+        <div className="invoice-card-topline">
+          <div className="invoice-card-title">
+            <span className="invoice-card-number">#{displayIndex + 1}</span>
+            <strong>{renderEditableCell(rowIndex, 'supplier', res.supplier === '—' ? '—' : res.supplier)}</strong>
+          </div>
+          <input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} />
+        </div>
+
+        <div className="invoice-card-meta">
+          <span>{renderEditableCell(rowIndex, 'date', res.date)}</span>
+          <span className={`morning-table-status ${getMorningStatus(res) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+            {getMorningStatus(res)}
+          </span>
+        </div>
+
+        {res.confidence !== 'high' && (
+          <span className={`confidence-badge confidence-${res.confidence}`}>
+            {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
+          </span>
+        )}
+
+        <div className="invoice-card-amounts">
+          <div>
+            <span>סה"כ</span>
+            <strong>{renderEditableCell(rowIndex, 'total', res.total != null ? `₪${res.total.toFixed(2)}` : '—', 'number')}</strong>
+          </div>
+          <div>
+            <span>מע"מ</span>
+            <strong>{renderEditableCell(rowIndex, 'vat', res.vat != null ? `₪${res.vat.toFixed(2)}` : '—', 'number')}</strong>
+          </div>
+          <div>
+            <span>לפני מע"מ</span>
+            <strong>{renderEditableCell(rowIndex, 'payment', res.payment != null ? `₪${res.payment.toFixed(2)}` : '—', 'number')}</strong>
+          </div>
+        </div>
+
+        <div className="invoice-card-detail">
+          <span>קטגוריה</span>
+          {renderCategorySelect(rowIndex)}
+        </div>
+
+        <div className="invoice-card-actions">
+          {res.fileUrl && (
+            <a
+              href={res.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="file-link"
+              title={`פתח את ${res.fileName}`}
+              aria-label={`פתח את ${res.fileName}`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 5h5v5" />
+                <path d="M10 14L19 5" />
+                <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
+              </svg>
+            </a>
+          )}
+          <button
+            type="button"
+            className="row-menu-button"
+            onClick={(event) => openRowMenu(res.rowKey, event)}
+            aria-label="פעולות לשורה"
+            title="פעולות"
+          >
+            ⋮
+          </button>
+        </div>
+      </article>
+    )
+  }
+
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError(null)
@@ -1597,6 +1688,10 @@ function App() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="invoice-card-list">
+            {visibleResults.map(renderMobileInvoiceCard)}
           </div>
         </section>
       )}
