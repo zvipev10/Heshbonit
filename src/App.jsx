@@ -280,6 +280,8 @@ function App() {
 
     const handlePointerDown = (event) => {
       if (event.target?.closest?.('.row-menu-wrapper')) return
+      if (event.target?.closest?.('.row-menu')) return
+      if (event.target?.closest?.('.row-menu-backdrop')) return
       closeRowMenu()
     }
 
@@ -1139,6 +1141,98 @@ function App() {
     )
   }
 
+  const renderRowMenuContent = (row) => {
+    if (!row) return null
+
+    const rowKeys = rowKeySet(row.rowKey)
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            handleCopyWithoutVat(rowKeys)
+            closeRowMenu()
+          }}
+        >
+          ללא מע"מ
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            handleCalculateWithVat(rowKeys)
+            closeRowMenu()
+          }}
+        >
+          עם מע"מ
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            handleMarkPrinted(rowKeys)
+            closeRowMenu()
+          }}
+        >
+          מודפס
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            handleRestoreOriginalTotal(rowKeys)
+            closeRowMenu()
+          }}
+        >
+          שחזר סכום
+        </button>
+        {activeTab === TAB_PENDING && (
+          <button
+            type="button"
+            onClick={() => handleApproveRows(rowKeys)}
+          >
+            אשר
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!row.isStoredRecord || typeof row.id !== 'number' || morningSending}
+          onClick={() => handleSendToMorning(rowKeys)}
+        >
+          {morningSending ? 'Sending...' : 'Send to Morning'}
+        </button>
+        <button
+          type="button"
+          className="row-menu-fraction-trigger"
+          onClick={() => setOpenFractionMenuKey(openFractionMenuKey === row.rowKey ? null : row.rowKey)}
+        >
+          סכום חלקי
+        </button>
+        {openFractionMenuKey === row.rowKey && (
+          <div className="row-fraction-options">
+            {['2/3', '1/2', '1/3', '1/4'].map((fraction) => (
+              <button
+                key={fraction}
+                type="button"
+                onClick={() => {
+                  handleApplyFraction(fraction, rowKeys)
+                  closeRowMenu()
+                }}
+              >
+                {fraction}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="row-menu-delete"
+          onClick={() => handleDeleteSelected(rowKeys)}
+        >
+          מחק
+        </button>
+      </>
+    )
+  }
+
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError(null)
@@ -1242,6 +1336,7 @@ function App() {
   const successResults = visibleResults.filter(r => !r.failed)
   const hasSelectedRows = selectedRows.size > 0
   const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
+  const activeRowMenuRow = openRowMenuKey ? result.find(row => row.rowKey === openRowMenuKey) : null
 
   return (
     <div className="container">
@@ -1472,89 +1567,9 @@ function App() {
                           </button>
                           {openRowMenuKey === res.rowKey && (
                             <>
-                              <button type="button" className="row-menu-backdrop" aria-label="סגור פעולות" onClick={closeRowMenu} />
-                              <div className="row-menu" style={rowMenuPosition || undefined}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleCopyWithoutVat(rowKeySet(res.rowKey))
-                                    closeRowMenu()
-                                  }}
-                                >
-                                  ללא מע"מ
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleCalculateWithVat(rowKeySet(res.rowKey))
-                                    closeRowMenu()
-                                  }}
-                                >
-                                  עם מע"מ
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleMarkPrinted(rowKeySet(res.rowKey))
-                                    closeRowMenu()
-                                  }}
-                                >
-                                  מודפס
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleRestoreOriginalTotal(rowKeySet(res.rowKey))
-                                    closeRowMenu()
-                                  }}
-                                >
-                                  שחזר סכום
-                                </button>
-                                {activeTab === TAB_PENDING && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApproveRows(rowKeySet(res.rowKey))}
-                                  >
-                                    אשר
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={!res.isStoredRecord || typeof res.id !== 'number' || morningSending}
-                                  onClick={() => handleSendToMorning(rowKeySet(res.rowKey))}
-                                >
-                                  {morningSending ? 'Sending...' : 'Send to Morning'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="row-menu-fraction-trigger"
-                                  onClick={() => setOpenFractionMenuKey(openFractionMenuKey === res.rowKey ? null : res.rowKey)}
-                                >
-                                  סכום חלקי
-                                </button>
-                                {openFractionMenuKey === res.rowKey && (
-                                  <div className="row-fraction-options">
-                                    {['2/3', '1/2', '1/3', '1/4'].map((fraction) => (
-                                      <button
-                                        key={fraction}
-                                        type="button"
-                                        onClick={() => {
-                                          handleApplyFraction(fraction, rowKeySet(res.rowKey))
-                                          closeRowMenu()
-                                        }}
-                                      >
-                                        {fraction}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                                <button
-                                  type="button"
-                                  className="row-menu-delete"
-                                  onClick={() => handleDeleteSelected(rowKeySet(res.rowKey))}
-                                >
-                                  מחק
-                                </button>
+                              <button type="button" className="row-menu-backdrop row-menu-desktop" aria-label="סגור פעולות" onClick={closeRowMenu} />
+                              <div className="row-menu row-menu-desktop" style={rowMenuPosition || undefined}>
+                                {renderRowMenuContent(res)}
                               </div>
                             </>
                           )}
@@ -1567,6 +1582,15 @@ function App() {
             </table>
           </div>
         </section>
+      )}
+
+      {activeRowMenuRow && (
+        <>
+          <button type="button" className="row-menu-backdrop row-menu-mobile-backdrop" aria-label="סגור פעולות" onClick={closeRowMenu} />
+          <div className="row-menu row-menu-mobile" role="dialog" aria-label="פעולות לשורה">
+            {renderRowMenuContent(activeRowMenuRow)}
+          </div>
+        </>
       )}
     </div>
   )

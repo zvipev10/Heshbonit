@@ -436,6 +436,11 @@ input[type="file"] {
   cursor: default;
 }
 
+.row-menu-mobile,
+.row-menu-mobile-backdrop {
+  display: none;
+}
+
 .row-menu {
   position: fixed;
   z-index: 1000;
@@ -896,11 +901,17 @@ input[type="file"] {
     box-sizing: border-box;
   }
 
-  .row-menu-backdrop {
+  .row-menu-desktop {
+    display: none;
+  }
+
+  .row-menu-mobile-backdrop {
+    display: block;
     background: rgba(15, 23, 42, 0.32);
   }
 
-  .row-menu {
+  .row-menu-mobile {
+    display: block;
     top: auto !important;
     right: 0 !important;
     bottom: 0 !important;
