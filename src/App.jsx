@@ -1125,13 +1125,35 @@ function App() {
     return (
       <article key={res.rowKey} className={`invoice-card ${getRowClassName(res)}`}>
         <div className="invoice-card-topline">
-          <div className="invoice-card-title">
+          <div className="invoice-card-controls">
+            <input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} />
             <span className="invoice-card-number">#{displayIndex + 1}</span>
-            <strong>{renderEditableCell(rowIndex, 'supplier', res.supplier === '—' ? '—' : res.supplier)}</strong>
+            {res.fileUrl && (
+              <a
+                href={res.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="file-link"
+                title={`פתח את ${res.fileName}`}
+                aria-label={`פתח את ${res.fileName}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 5h5v5" />
+                  <path d="M10 14L19 5" />
+                  <path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
+                </svg>
+              </a>
+            )}
           </div>
-          <input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} />
-        </div>
 
+          <div className="invoice-card-title">
+            <strong>{renderEditableCell(rowIndex, 'supplier', res.supplier === '—' ? '—' : res.supplier)}</strong>
+            <div className="invoice-card-category">
+              <span>קטגוריה</span>
+              {renderCategorySelect(rowIndex)}
+            </div>
+          </div>
+        </div>
         <div className="invoice-card-meta">
           <span>{renderEditableCell(rowIndex, 'date', res.date)}</span>
           <span className={`morning-table-status ${getMorningStatus(res) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
@@ -1152,30 +1174,6 @@ function App() {
             <span>לפני מע"מ</span>
             <strong>{renderEditableCell(rowIndex, 'payment', res.payment != null ? `₪${res.payment.toFixed(2)}` : '—', 'number')}</strong>
           </div>
-        </div>
-
-        <div className="invoice-card-detail">
-          <span>קטגוריה</span>
-          {renderCategorySelect(rowIndex)}
-        </div>
-
-        <div className="invoice-card-actions">
-          {res.fileUrl && (
-            <a
-              href={res.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="file-link"
-              title={`פתח את ${res.fileName}`}
-              aria-label={`פתח את ${res.fileName}`}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 5h5v5" />
-                <path d="M10 14L19 5" />
-                <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
-              </svg>
-            </a>
-          )}
         </div>
       </article>
     )
