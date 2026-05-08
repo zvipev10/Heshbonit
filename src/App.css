@@ -532,6 +532,34 @@ input[type="file"] {
   margin-left: 12px;
 }
 
+.bulk-action-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #dbe3f0;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bulk-action-dismiss:hover:not(:disabled) {
+  background: #f8fafc;
+  color: #263247;
+  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.12);
+}
+
+.bulk-action-dismiss:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+
 .bulk-action-button {
   padding: 10px 16px;
   border: 1px solid #3b82f6;
@@ -710,17 +738,6 @@ input[type="file"] {
 .morning-table-status-fail {
   background: #fee2e2;
   color: #b91c1c;
-}
-
-.bulk-action-clear {
-  border-color: #cbd5e1;
-  color: #475569;
-}
-
-.bulk-action-clear:hover:not(:disabled) {
-  background: #f8fafc;
-  color: #263247;
-  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.12);
 }
 
 .invoice-card {
@@ -928,9 +945,13 @@ input[type="file"] {
   }
 
   .bulk-actions-info {
-    width: 100%;
+    flex: 1 1 calc(100% - 48px);
     margin-right: 0;
     text-align: right;
+  }
+
+  .bulk-action-dismiss {
+    flex: 0 0 36px;
   }
 
   .bulk-action-button,

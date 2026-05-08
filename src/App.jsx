@@ -1068,6 +1068,16 @@ function App() {
 
   const renderBulkActions = () => (
     <div className="bulk-actions" role="toolbar" aria-label="פעולות על פריטים שנבחרו">
+      <button
+        type="button"
+        onClick={() => setSelectedRows(new Set())}
+        className="bulk-action-dismiss"
+        disabled={saving}
+        aria-label="נקה בחירה"
+        title="נקה בחירה"
+      >
+        ×
+      </button>
       <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
       <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
       <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={saving}>עם מע"מ</button>
@@ -1091,7 +1101,6 @@ function App() {
           <option value="1/4">1/4</option>
         </select>
       </div>
-      <button type="button" onClick={() => setSelectedRows(new Set())} className="bulk-action-button bulk-action-clear" disabled={saving}>נקה בחירה</button>
       <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
     </div>
   )
