@@ -392,7 +392,7 @@ function App() {
             continue
           }
 
-          const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+          const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
           const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
 
           results.push({
@@ -411,7 +411,6 @@ function App() {
             originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
             printed: 'לא',
             status: TAB_PENDING,
-            confidence,
             morningCategoryId: morningCategoryId || null,
             morningCategoryName: morningCategoryName || null,
             morningCategoryCode: morningCategoryCode ?? null,
@@ -495,7 +494,7 @@ function App() {
           continue
         }
 
-        const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+        const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
         const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
         const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : r.gmailSourceUrl || null)
 
@@ -517,7 +516,6 @@ function App() {
           originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
           printed: 'לא',
           status: TAB_PENDING,
-          confidence,
           morningCategoryId: morningCategoryId || null,
           morningCategoryName: morningCategoryName || null,
           morningCategoryCode: morningCategoryCode ?? null,
@@ -579,7 +577,7 @@ function App() {
   }
 
   const mapProcessedGmailResult = (r, rowKey = createLocalRowKey(), fallbackSourceUrl = null) => {
-    const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, confidence, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
+    const { vendorName, date, totalWithVat, originalTotalWithVat, totalWithoutVat, morningCategoryId, morningCategoryName, morningCategoryCode } = r.data
     const vat = totalWithVat != null && totalWithoutVat != null ? totalWithVat - totalWithoutVat : null
     const fileUrl = typeof r.id === 'number' ? `${API_BASE}/file/${r.id}` : (r.fileData ? base64ToBlobUrl(r.fileData, r.mimeType) : (r.gmailSourceUrl || fallbackSourceUrl || null))
 
@@ -601,7 +599,6 @@ function App() {
       originalTotalWithVat: originalTotalWithVat ?? totalWithVat,
       printed: 'לא',
       status: TAB_PENDING,
-      confidence,
       morningCategoryId: morningCategoryId || null,
       morningCategoryName: morningCategoryName || null,
       morningCategoryCode: morningCategoryCode ?? null,
@@ -1269,6 +1266,7 @@ function App() {
           <option value="1/4">1/4</option>
         </select>
       </div>
+      <button type="button" onClick={() => setSelectedRows(new Set())} className="bulk-action-button bulk-action-clear" disabled={saving}>נקה בחירה</button>
       <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
     </div>
   )
@@ -1306,12 +1304,6 @@ function App() {
             {getMorningStatus(res)}
           </span>
         </div>
-
-        {res.confidence !== 'high' && (
-          <span className={`confidence-badge confidence-${res.confidence}`}>
-            {res.confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
-          </span>
-        )}
 
         <div className="invoice-card-amounts">
           <div>
@@ -1431,8 +1423,7 @@ function App() {
           morningCategoryName: res.morningCategoryName || null,
           morningCategoryCode: res.morningCategoryCode ?? null,
           currency: 'ILS',
-          confidence: res.confidence || 'medium',
-        }))
+          }))
 
       const response = await fetch(`${API_BASE}/save-batch`, {
         method: 'POST',
@@ -1628,11 +1619,6 @@ function App() {
                           {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
                           {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
                         </div>
-                        {result[i].confidence !== 'high' && (
-                          <span className={`confidence-badge confidence-${result[i].confidence}`}>
-                            {result[i].confidence === 'medium' ? 'בינוני' : 'נמוך'} — יש לאמת
-                          </span>
-                        )}
                       </div>
                     </td>
                     <td>{renderCategorySelect(i)}</td>
