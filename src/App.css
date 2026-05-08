@@ -209,6 +209,18 @@ input[type="file"] {
   padding: 24px;
 }
 
+.results-loading {
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.invoice-loading {
+  color: #4f67f6;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
 .results-header {
   display: flex;
   align-items: center;

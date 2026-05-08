@@ -38,10 +38,12 @@ function App() {
   const [gmailLoading, setGmailLoading] = useState(false)
   const [morningSending, setMorningSending] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
   const [morningCategories, setMorningCategories] = useState([])
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const blobUrlsRef = useRef(new Set())
+  const invoiceLoadRequestRef = useRef(0)
 
   const registerBlobUrl = (url) => {
     if (url?.startsWith('blob:')) {
@@ -197,19 +199,25 @@ function App() {
   }
 
   const loadDataFromDatabase = async (status = activeTab) => {
+    const requestId = invoiceLoadRequestRef.current + 1
+    invoiceLoadRequestRef.current = requestId
     const tabLabel = status === TAB_PENDING ? 'חדשות' : 'מאושרות'
     try {
       setError(null)
+      setLoadingInvoices(true)
+      setResult([])
       const response = await fetch(`${API_BASE}/list?status=${encodeURIComponent(status)}`, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.success) {
         throw new Error(json?.error || 'Failed to load data from database')
       }
       if (json.success && json.invoices) {
+        if (requestId !== invoiceLoadRequestRef.current) return
         const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
         setResult(sortResultsByDateAsc(mappedInvoices))
       }
     } catch (err) {
+      if (requestId !== invoiceLoadRequestRef.current) return
       console.error('Failed to load data from database:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(
@@ -218,7 +226,10 @@ function App() {
           : message,
       )
     } finally {
-      setDbLoaded(true)
+      if (requestId === invoiceLoadRequestRef.current) {
+        setLoadingInvoices(false)
+        setDbLoaded(true)
+      }
     }
   }
 
@@ -1421,7 +1432,13 @@ function App() {
         </div>
       )}
 
-      {visibleResults.length > 0 && (
+      {loadingInvoices && (
+        <section className="results results-loading">
+          <div className="invoice-loading">טוען...</div>
+        </section>
+      )}
+
+      {!loadingInvoices && visibleResults.length > 0 && (
         <section className="results">
           <div className="results-header">
             <h2>דוח חשבוניות ({visibleResults.length})</h2>
