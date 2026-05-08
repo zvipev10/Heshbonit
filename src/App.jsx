@@ -1244,6 +1244,35 @@ function App() {
     )
   }
 
+  const renderBulkActions = () => (
+    <div className="bulk-actions" role="toolbar" aria-label="פעולות על פריטים שנבחרו">
+      <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
+      <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
+      <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={saving}>עם מע"מ</button>
+      <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={saving}>מודפס</button>
+      <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={saving}>שחזר סכום</button>
+      {activeTab === TAB_PENDING && (
+        <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
+      )}
+      <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
+        {morningSending ? 'Sending...' : 'Send to Morning'}
+      </button>
+      <div className="bulk-action-dropdown-wrapper">
+        <select onChange={(e) => {
+          if (e.target.value) handleApplyFraction(e.target.value)
+          e.target.value = ''
+        }} defaultValue="" className="bulk-action-dropdown" disabled={saving}>
+          <option value="">סכום חלקי</option>
+          <option value="2/3">2/3</option>
+          <option value="1/2">1/2</option>
+          <option value="1/3">1/3</option>
+          <option value="1/4">1/4</option>
+        </select>
+      </div>
+      <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
+    </div>
+  )
+
   const handleSaveToDatabase = async () => {
     setSaving(true)
     setError(null)
@@ -1467,35 +1496,6 @@ function App() {
             </div>
           )}
 
-          {hasSelectedRows && (
-            <div className="bulk-actions">
-              <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
-              <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
-              <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={saving}>עם מע"מ</button>
-              <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={saving}>מודפס</button>
-              <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={saving}>שחזר סכום</button>
-              {activeTab === TAB_PENDING && (
-                <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
-              )}
-              <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
-                {morningSending ? 'Sending...' : 'Send to Morning'}
-              </button>
-              <div className="bulk-action-dropdown-wrapper">
-                <select onChange={(e) => {
-                  if (e.target.value) handleApplyFraction(e.target.value)
-                  e.target.value = ''
-                }} defaultValue="" className="bulk-action-dropdown" disabled={saving}>
-                  <option value="">סכום חלקי</option>
-                  <option value="2/3">2/3</option>
-                  <option value="1/2">1/2</option>
-                  <option value="1/3">1/3</option>
-                  <option value="1/4">1/4</option>
-                </select>
-              </div>
-              <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
-            </div>
-          )}
-
           <div className="table-scroll">
             <table className="results-table">
               <thead>
@@ -1600,6 +1600,8 @@ function App() {
           </div>
         </section>
       )}
+
+      {hasSelectedRows && renderBulkActions()}
 
       {activeRowMenuRow && (
         <>

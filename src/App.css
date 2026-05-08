@@ -626,18 +626,25 @@ input[type="file"] {
 }
 
 .bulk-actions {
-  order: 2;
+  position: fixed;
+  right: auto;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
   display: flex;
   flex-direction: row;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
   direction: rtl;
   gap: 12px;
-  padding: 16px 20px;
-  background: #f0f9ff;
+  width: min(1180px, calc(100vw - 36px));
+  padding: 14px 18px;
+  background: rgba(240, 249, 255, 0.96);
   border: 1px solid #bfdbfe;
-  border-radius: 12px;
-  margin-bottom: 20px;
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .bulk-actions-info {
@@ -891,7 +898,12 @@ input[type="file"] {
     align-items: stretch;
     justify-content: stretch;
     gap: 10px;
+    width: calc(100vw - 24px);
+    max-height: min(48dvh, 360px);
     padding: 14px 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 18px;
   }
 
   .bulk-actions-info {
