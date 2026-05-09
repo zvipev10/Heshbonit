@@ -103,8 +103,8 @@ function App() {
 
   const getMorningStatus = (row) => {
     if (!row.isStoredRecord) return '—'
-    if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return 'עבר'
-    return 'לא עבר'
+    if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return 'עבר למורנינג'
+    return 'לא עבר למורנינג'
   }
 
   const getCategoryLabel = (category) => {
@@ -1079,13 +1079,13 @@ function App() {
         ×
       </button>
       <span className="bulk-actions-info">בחרת {selectedRows.size} פריטים</span>
-      <button type="button" onClick={() => handleCopyWithoutVat()} className="bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
-      <button type="button" onClick={() => handleCalculateWithVat()} className="bulk-action-button" disabled={saving}>עם מע"מ</button>
+      <button type="button" onClick={() => handleCopyWithoutVat()} className="app-button app-button-outline bulk-action-button bulk-action-without-vat" disabled={saving}>ללא מע"מ</button>
+      <button type="button" onClick={() => handleCalculateWithVat()} className="app-button app-button-outline bulk-action-button" disabled={saving}>עם מע"מ</button>
       <div className="bulk-action-dropdown-wrapper">
         <select onChange={(e) => {
           if (e.target.value) handleApplyFraction(e.target.value)
           e.target.value = ''
-        }} defaultValue="" className="bulk-action-dropdown" disabled={saving}>
+        }} defaultValue="" className="app-button app-button-outline bulk-action-dropdown" disabled={saving}>
           <option value="">סכום חלקי</option>
           <option value="2/3">2/3</option>
           <option value="1/2">1/2</option>
@@ -1093,15 +1093,15 @@ function App() {
           <option value="1/4">1/4</option>
         </select>
       </div>
-      <button type="button" onClick={() => handleMarkPrinted()} className="bulk-action-button" disabled={saving}>מודפס</button>
-      <button type="button" onClick={() => handleRestoreOriginalTotal()} className="bulk-action-button" disabled={saving}>שחזר סכום</button>
+      <button type="button" onClick={() => handleMarkPrinted()} className="app-button app-button-outline bulk-action-button" disabled={saving}>מודפס</button>
+      <button type="button" onClick={() => handleRestoreOriginalTotal()} className="app-button app-button-outline bulk-action-button" disabled={saving}>שחזר סכום</button>
       {activeTab === TAB_PENDING && (
-        <button type="button" onClick={() => handleApproveRows()} className="bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
+        <button type="button" onClick={() => handleApproveRows()} className="app-button app-button-success bulk-action-button bulk-action-approve" disabled={saving}>אשר</button>
       )}
-      <button type="button" onClick={() => handleSendToMorning()} className="bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
+      <button type="button" onClick={() => handleSendToMorning()} className="app-button app-button-integration bulk-action-button bulk-action-morning" disabled={selectedStoredRowsCount === 0 || morningSending || saving}>
         {morningSending ? 'Sending...' : 'Send to Morning'}
       </button>
-      <button type="button" onClick={() => handleDeleteSelected()} className="bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
+      <button type="button" onClick={() => handleDeleteSelected()} className="app-button app-button-danger bulk-action-button bulk-action-delete" disabled={saving}>מחק</button>
     </div>
   )
 
@@ -1156,7 +1156,7 @@ function App() {
         </div>
         <div className="invoice-card-meta">
           <span>{renderEditableCell(rowIndex, 'date', res.date)}</span>
-          <span className={`morning-table-status ${getMorningStatus(res) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+          <span className={`morning-table-status ${getMorningStatus(res) === 'עבר למורנינג' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
             {getMorningStatus(res)}
           </span>
         </div>
@@ -1326,13 +1326,13 @@ function App() {
           </div>
 
           <div className="upload-actions upload-actions-primary">
-            <button type="button" onClick={openUploadPicker} className="upload-button" disabled={processing}>
+            <button type="button" onClick={openUploadPicker} className="app-button app-button-primary upload-button" disabled={processing}>
               {processing ? 'מעבד...' : 'העלה קבצים / תמונות'}
             </button>
-            <button type="button" onClick={openCameraPicker} className="upload-button" disabled={processing}>
+            <button type="button" onClick={openCameraPicker} className="app-button app-button-primary upload-button" disabled={processing}>
               צלם חשבונית
             </button>
-            <button type="button" onClick={handleGmailSync} className="upload-button" disabled={gmailLoading}>
+            <button type="button" onClick={handleGmailSync} className="app-button app-button-primary upload-button" disabled={gmailLoading}>
               {gmailLoading ? 'מסנכרן...' : 'סנכרן Gmail'}
             </button>
           </div>
@@ -1449,7 +1449,7 @@ function App() {
                     <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
                     <td>{result[i].printed || 'לא'}</td>
                     <td>
-                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר למורנינג' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
                         {getMorningStatus(result[i])}
                       </span>
                     </td>
