@@ -43,6 +43,8 @@ function App() {
   const [dateToDraft, setDateToDraft] = useState('')
   const [appliedDateFrom, setAppliedDateFrom] = useState('')
   const [appliedDateTo, setAppliedDateTo] = useState('')
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+  const [activeFilterPanel, setActiveFilterPanel] = useState(null)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const blobUrlsRef = useRef(new Set())
@@ -651,6 +653,8 @@ function App() {
     setDateToDraft('')
     setAppliedDateFrom('')
     setAppliedDateTo('')
+    setFilterMenuOpen(false)
+    setActiveFilterPanel(null)
   }
 
   const dateToISO = (hebrewDate) => {
@@ -1127,19 +1131,34 @@ function App() {
   const applySearchFilter = (event) => {
     event?.preventDefault()
     setAppliedSearch(searchDraft.trim().toLowerCase())
+    setAppliedDateFrom('')
+    setAppliedDateTo('')
+    setDateFromDraft('')
+    setDateToDraft('')
+    setActiveFilterPanel(null)
+    setFilterMenuOpen(false)
     setSelectedRows(new Set())
   }
 
   const applyDateFilter = (event) => {
     event?.preventDefault()
+    setAppliedSearch('')
+    setSearchDraft('')
     setAppliedDateFrom(dateFromDraft)
     setAppliedDateTo(dateToDraft)
+    setActiveFilterPanel(null)
+    setFilterMenuOpen(false)
     setSelectedRows(new Set())
   }
 
   const clearFilters = () => {
     resetFilters()
     setSelectedRows(new Set())
+  }
+
+  const openFilterPanel = (panel) => {
+    setActiveFilterPanel(panel)
+    setFilterMenuOpen(false)
   }
 
   const renderMobileInvoiceCard = (res, displayIndex) => {
@@ -1335,6 +1354,9 @@ function App() {
   const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
   const allSelected = filteredResults.length > 0 && filteredResults.every(row => selectedRows.has(row.rowKey))
   const hasActiveFilters = Boolean(appliedSearch || appliedDateFrom || appliedDateTo)
+  const activeFilterText = appliedSearch
+    ? `ספק מכיל: ${appliedSearch}`
+    : [appliedDateFrom && `מתאריך ${appliedDateFrom}`, appliedDateTo && `עד ${appliedDateTo}`].filter(Boolean).join(' · ')
   const toggleAll = () => {
     setSelectedRows(allSelected ? new Set() : new Set(filteredResults.map(row => row.rowKey)))
   }
@@ -1431,15 +1453,47 @@ function App() {
       {!loadingInvoices && visibleResults.length > 0 && (
         <section className="results">
           <div className="results-header">
-            <h2>דוח חשבוניות ({filteredResults.length})</h2>
-            {hasActiveFilters && (
-              <span className="filter-count">מתוך {visibleResults.length}</span>
-            )}
+            <div className="results-title-row">
+              <h2>דוח חשבוניות ({filteredResults.length})</h2>
+              {hasActiveFilters && (
+                <span className="filter-count">מתוך {visibleResults.length}</span>
+              )}
+              {hasActiveFilters && (
+                <span className="active-filter-chip">
+                  {activeFilterText}
+                  <button type="button" onClick={clearFilters} aria-label="נקה סינון">×</button>
+                </span>
+              )}
+            </div>
+            <div className="filter-menu-wrapper">
+              <button
+                type="button"
+                className={`filter-icon-button ${filterMenuOpen || activeFilterPanel ? 'filter-icon-button-active' : ''}`}
+                onClick={() => {
+                  setFilterMenuOpen(prev => !prev)
+                  setActiveFilterPanel(null)
+                }}
+                aria-label="סינון"
+                title="סינון"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 5h16" />
+                  <path d="M7 12h10" />
+                  <path d="M10 19h4" />
+                </svg>
+              </button>
+
+              {filterMenuOpen && (
+                <div className="filter-menu" role="menu">
+                  <button type="button" onClick={() => openFilterPanel('search')}>ספק</button>
+                  <button type="button" onClick={() => openFilterPanel('dates')}>תאריכים</button>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="results-filters" aria-label="סינון חשבוניות">
+          {activeFilterPanel === 'search' && (
             <form className="filter-group filter-search" onSubmit={applySearchFilter}>
-              <label htmlFor="invoice-search">חפש</label>
               <input
                 id="invoice-search"
                 type="search"
@@ -1447,11 +1501,12 @@ function App() {
                 onChange={(event) => setSearchDraft(event.target.value)}
                 placeholder="חפש לפי ספק"
               />
-              <button type="submit" className="app-button app-button-outline filter-button">חפש</button>
+              <button type="submit" className="app-button app-button-outline filter-button">סנן</button>
             </form>
+          )}
 
+          {activeFilterPanel === 'dates' && (
             <form className="filter-group filter-dates" onSubmit={applyDateFilter}>
-              <span className="filter-label">תאריכים</span>
               <label>
                 <span>מתאריך</span>
                 <input
@@ -1470,13 +1525,7 @@ function App() {
               </label>
               <button type="submit" className="app-button app-button-outline filter-button">סנן</button>
             </form>
-
-            {hasActiveFilters && (
-              <button type="button" className="filter-clear" onClick={clearFilters}>
-                נקה סינון
-              </button>
-            )}
-          </div>
+          )}
 
           {gmailSummary && (
             <div className="gmail-summary">
