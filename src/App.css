@@ -1121,6 +1121,7 @@ input[type="file"] {
   .filter-dates {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .filter-dates label {
@@ -1128,8 +1129,20 @@ input[type="file"] {
   }
 
   .filter-dates input {
+    display: block;
     width: 100%;
     min-width: 0;
+    max-width: 100%;
+    font-size: 0.84rem;
+    padding: 0 8px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .filter-dates .filter-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-width: 76px;
   }
 
   .filter-button {
