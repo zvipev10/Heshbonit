@@ -434,6 +434,7 @@ input[type="file"] {
   background: #f7f8fc;
   border: 1px solid #e7eaf3;
   border-radius: 16px;
+  box-sizing: border-box;
 }
 
 .filter-group label {
@@ -1103,17 +1104,32 @@ input[type="file"] {
     padding: 12px;
   }
 
+  .filter-search {
+    flex-wrap: nowrap;
+  }
+
   .filter-search input {
-    flex: 1 1 100%;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+
+  .filter-search .filter-button {
+    flex: 0 0 76px;
+  }
+
+  .filter-dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .filter-dates label {
-    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
   }
 
   .filter-dates input {
     width: 100%;
+    min-width: 0;
   }
 
   .filter-button {
