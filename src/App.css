@@ -297,7 +297,8 @@ input[type="file"] {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .results-header h2 {
@@ -306,6 +307,94 @@ input[type="file"] {
   font-size: 1.85rem;
   font-weight: 800;
   text-align: right;
+}
+
+.filter-count {
+  color: #7b879a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.results-filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #f7f8fc;
+  border: 1px solid #e7eaf3;
+  border-radius: 16px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin: 0;
+}
+
+.filter-group label,
+.filter-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.filter-search input,
+.filter-dates input {
+  height: 40px;
+  border: 1px solid #dbe3f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #263247;
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.filter-search input {
+  width: min(260px, 26vw);
+}
+
+.filter-dates input {
+  width: 148px;
+  direction: ltr;
+  text-align: left;
+}
+
+.filter-search input:focus,
+.filter-dates input:focus {
+  outline: none;
+  border-color: #8ea0ff;
+  box-shadow: 0 0 0 3px rgba(79, 103, 246, 0.12);
+}
+
+.filter-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.filter-clear {
+  min-height: 40px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.filter-clear:hover {
+  color: #263247;
 }
 
 .gmail-summary {
@@ -378,6 +467,16 @@ input[type="file"] {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.empty-filter-results {
+  border: 1px dashed #dbe3f0;
+  border-radius: 16px;
+  background: #fbfcff;
+  color: #667085;
+  font-weight: 800;
+  padding: 28px 18px;
+  text-align: center;
 }
 
 .results-table {
@@ -897,6 +996,42 @@ input[type="file"] {
 
   .results-header h2 {
     font-size: 1.55rem;
+  }
+
+  .results-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .filter-group {
+    flex-wrap: wrap;
+    align-items: end;
+  }
+
+  .filter-search label {
+    flex: 1 1 100%;
+  }
+
+  .filter-search input {
+    width: 100%;
+  }
+
+  .filter-dates label {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .filter-dates input {
+    width: 100%;
+  }
+
+  .filter-button {
+    flex: 0 0 auto;
+  }
+
+  .filter-clear {
+    align-self: flex-start;
   }
 
   .summary-cards {

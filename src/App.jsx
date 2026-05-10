@@ -37,6 +37,12 @@ function App() {
   const [dbLoaded, setDbLoaded] = useState(false)
   const [loadingInvoices, setLoadingInvoices] = useState(false)
   const [morningCategories, setMorningCategories] = useState([])
+  const [searchDraft, setSearchDraft] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [dateFromDraft, setDateFromDraft] = useState('')
+  const [dateToDraft, setDateToDraft] = useState('')
+  const [appliedDateFrom, setAppliedDateFrom] = useState('')
+  const [appliedDateTo, setAppliedDateTo] = useState('')
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const blobUrlsRef = useRef(new Set())
@@ -238,6 +244,7 @@ function App() {
     setActiveTab(status)
     setSelectedRows(new Set())
     setEditingCell(null)
+    resetFilters()
     setError(null)
     setDuplicateNotice(null)
     setGmailSummary(null)
@@ -637,9 +644,13 @@ function App() {
     })
   }
 
-  const allSelected = result.length > 0 && result.every(row => selectedRows.has(row.rowKey))
-  const toggleAll = () => {
-    setSelectedRows(allSelected ? new Set() : new Set(result.map(row => row.rowKey)))
+  const resetFilters = () => {
+    setSearchDraft('')
+    setAppliedSearch('')
+    setDateFromDraft('')
+    setDateToDraft('')
+    setAppliedDateFrom('')
+    setAppliedDateTo('')
   }
 
   const dateToISO = (hebrewDate) => {
@@ -1107,6 +1118,30 @@ function App() {
 
   const getResultIndexByRowKey = (rowKey) => result.findIndex(row => row.rowKey === rowKey)
 
+  const parseFilterDate = (value) => {
+    if (!value) return null
+    const parsed = new Date(`${value}T00:00:00`)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const applySearchFilter = (event) => {
+    event?.preventDefault()
+    setAppliedSearch(searchDraft.trim().toLowerCase())
+    setSelectedRows(new Set())
+  }
+
+  const applyDateFilter = (event) => {
+    event?.preventDefault()
+    setAppliedDateFrom(dateFromDraft)
+    setAppliedDateTo(dateToDraft)
+    setSelectedRows(new Set())
+  }
+
+  const clearFilters = () => {
+    resetFilters()
+    setSelectedRows(new Set())
+  }
+
   const renderMobileInvoiceCard = (res, displayIndex) => {
     const rowIndex = getResultIndexByRowKey(res.rowKey)
 
@@ -1278,9 +1313,31 @@ function App() {
   }
 
   const visibleResults = result.filter(r => !isDuplicateResult(r))
-  const successResults = visibleResults.filter(r => !r.failed)
+  const filteredResults = visibleResults.filter((row) => {
+    if (appliedSearch) {
+      const supplier = String(row.supplier || '').toLowerCase()
+      if (!supplier.includes(appliedSearch)) return false
+    }
+
+    const fromDate = parseFilterDate(appliedDateFrom)
+    const toDate = parseFilterDate(appliedDateTo)
+    if (fromDate || toDate) {
+      const rowDate = parseDisplayDate(row.date)
+      if (!rowDate) return false
+      if (fromDate && rowDate < fromDate) return false
+      if (toDate && rowDate > toDate) return false
+    }
+
+    return true
+  })
+  const successResults = filteredResults.filter(r => !r.failed)
   const hasSelectedRows = selectedRows.size > 0
   const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
+  const allSelected = filteredResults.length > 0 && filteredResults.every(row => selectedRows.has(row.rowKey))
+  const hasActiveFilters = Boolean(appliedSearch || appliedDateFrom || appliedDateTo)
+  const toggleAll = () => {
+    setSelectedRows(allSelected ? new Set() : new Set(filteredResults.map(row => row.rowKey)))
+  }
 
   return (
     <div className="container">
@@ -1374,7 +1431,51 @@ function App() {
       {!loadingInvoices && visibleResults.length > 0 && (
         <section className="results">
           <div className="results-header">
-            <h2>דוח חשבוניות ({visibleResults.length})</h2>
+            <h2>דוח חשבוניות ({filteredResults.length})</h2>
+            {hasActiveFilters && (
+              <span className="filter-count">מתוך {visibleResults.length}</span>
+            )}
+          </div>
+
+          <div className="results-filters" aria-label="סינון חשבוניות">
+            <form className="filter-group filter-search" onSubmit={applySearchFilter}>
+              <label htmlFor="invoice-search">חפש</label>
+              <input
+                id="invoice-search"
+                type="search"
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="חפש לפי ספק"
+              />
+              <button type="submit" className="app-button app-button-outline filter-button">חפש</button>
+            </form>
+
+            <form className="filter-group filter-dates" onSubmit={applyDateFilter}>
+              <span className="filter-label">תאריכים</span>
+              <label>
+                <span>מתאריך</span>
+                <input
+                  type="date"
+                  value={dateFromDraft}
+                  onChange={(event) => setDateFromDraft(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>עד תאריך</span>
+                <input
+                  type="date"
+                  value={dateToDraft}
+                  onChange={(event) => setDateToDraft(event.target.value)}
+                />
+              </label>
+              <button type="submit" className="app-button app-button-outline filter-button">סנן</button>
+            </form>
+
+            {hasActiveFilters && (
+              <button type="button" className="filter-clear" onClick={clearFilters}>
+                נקה סינון
+              </button>
+            )}
           </div>
 
           {gmailSummary && (
@@ -1401,87 +1502,96 @@ function App() {
           )}
 
           <div className="table-scroll">
-            <table className="results-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-                  <th>#</th>
-                  <th>תאריך</th>
-                  <th>ספק</th>
-                  <th>קטגוריה</th>
-                  <th>לפני מע"מ</th>
-                  <th>מע"מ</th>
-                  <th>סה"כ</th>
-                  <th>מודפס</th>
-                  <th>מורנינג</th>
-                  <th>קובץ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleResults.map((res, i) => res.failed ? (
-                  <tr key={res.rowKey} className="row-failed">
-                    <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
-                    <td>{i + 1}</td>
-                    <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
+            {filteredResults.length === 0 ? (
+              <div className="empty-filter-results">לא נמצאו חשבוניות מתאימות לסינון</div>
+            ) : (
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
+                    <th>#</th>
+                    <th>תאריך</th>
+                    <th>ספק</th>
+                    <th>קטגוריה</th>
+                    <th>לפני מע"מ</th>
+                    <th>מע"מ</th>
+                    <th>סה"כ</th>
+                    <th>מודפס</th>
+                    <th>מורנינג</th>
+                    <th>קובץ</th>
                   </tr>
-                ) : (
-                  <tr
-                    key={res.rowKey}
-                    className={getRowClassName(res)}
-                  >
-                    <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
-                    <td>{i + 1}</td>
-                    <td>{renderEditableCell(i, 'date', result[i].date)}</td>
-                    <td>
-                      <div className="supplier-cell">
-                        <div className="supplier-line">
-                          {renderEditableCell(i, 'supplier', result[i].supplier === '—' ? '—' : result[i].supplier)}
-                          {result[i].source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
-                        </div>
-                      </div>
-                    </td>
-                    <td>{renderCategorySelect(i)}</td>
-                    <td>{renderEditableCell(i, 'payment', result[i].payment != null ? `₪${result[i].payment.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{renderEditableCell(i, 'vat', result[i].vat != null ? `₪${result[i].vat.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{renderEditableCell(i, 'total', result[i].total != null ? `₪${result[i].total.toFixed(2)}` : '—', 'number')}</td>
-                    <td>{result[i].printed || 'לא'}</td>
-                    <td>
-                      <span className={`morning-table-status ${getMorningStatus(result[i]) === 'עבר למורנינג' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
-                        {getMorningStatus(result[i])}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        {result[i].fileUrl && (
-                          <a
-                            href={result[i].fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="file-link"
-                            title={`פתח את ${result[i].fileName}`}
-                            aria-label={`פתח את ${result[i].fileName}`}
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M14 5h5v5" />
-                              <path d="M10 14L19 5" />
-                              <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
-                            </svg>
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredResults.map((res, i) => {
+                    const rowIndex = getResultIndexByRowKey(res.rowKey)
+                    return res.failed ? (
+                      <tr key={res.rowKey} className="row-failed">
+                        <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
+                        <td>{i + 1}</td>
+                        <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                      </tr>
+                    ) : (
+                      <tr
+                        key={res.rowKey}
+                        className={getRowClassName(res)}
+                      >
+                        <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
+                        <td>{i + 1}</td>
+                        <td>{renderEditableCell(rowIndex, 'date', res.date)}</td>
+                        <td>
+                          <div className="supplier-cell">
+                            <div className="supplier-line">
+                              {renderEditableCell(rowIndex, 'supplier', res.supplier === '—' ? '—' : res.supplier)}
+                              {res.source === 'gmail' && <span className="gmail-source-badge">Gmail</span>}
+                            </div>
+                          </div>
+                        </td>
+                        <td>{renderCategorySelect(rowIndex)}</td>
+                        <td>{renderEditableCell(rowIndex, 'payment', res.payment != null ? `₪${res.payment.toFixed(2)}` : '—', 'number')}</td>
+                        <td>{renderEditableCell(rowIndex, 'vat', res.vat != null ? `₪${res.vat.toFixed(2)}` : '—', 'number')}</td>
+                        <td>{renderEditableCell(rowIndex, 'total', res.total != null ? `₪${res.total.toFixed(2)}` : '—', 'number')}</td>
+                        <td>{res.printed || 'לא'}</td>
+                        <td>
+                          <span className={`morning-table-status ${getMorningStatus(res) === 'עבר למורנינג' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
+                            {getMorningStatus(res)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            {res.fileUrl && (
+                              <a
+                                href={res.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="file-link"
+                                title={`פתח את ${res.fileName}`}
+                                aria-label={`פתח את ${res.fileName}`}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M14 5h5v5" />
+                                  <path d="M10 14L19 5" />
+                                  <path d="M19 14v4a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6a1.5 1.5 0 0 1 1-1h4" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
 
-          <div className="invoice-card-list">
-            {visibleResults.map(renderMobileInvoiceCard)}
-          </div>
+          {filteredResults.length > 0 && (
+            <div className="invoice-card-list">
+              {filteredResults.map(renderMobileInvoiceCard)}
+            </div>
+          )}
         </section>
       )}
 
