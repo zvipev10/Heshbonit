@@ -1006,7 +1006,24 @@ input[type="file"] {
   flex-wrap: wrap;
 }
 
-.invoice-card-meta > span:first-child {
+.invoice-card-value {
+  color: #263247;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.invoice-card-value .editable-cell,
+.invoice-card-category .editable-cell {
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.invoice-card-meta > .invoice-card-value {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1015,21 +1032,7 @@ input[type="file"] {
   padding: 6px 10px;
   border-radius: 12px;
   background: #f8fafc;
-  color: #263247;
-  font-size: 0.9rem;
-  font-weight: 400;
-  line-height: 1.25;
   box-sizing: border-box;
-}
-
-.invoice-card-meta > span:first-child .editable-cell,
-.invoice-card-category .editable-cell {
-  padding: 0;
-  border-radius: 0;
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
 }
 
 .invoice-card .morning-table-status {
@@ -1092,10 +1095,6 @@ input[type="file"] {
 
 .invoice-card-amounts strong {
   display: block;
-  color: #263247;
-  font-size: 0.9rem;
-  font-weight: 400;
-  line-height: 1.25;
   margin-top: 2px;
 }
 
@@ -1107,12 +1106,16 @@ input[type="file"] {
   padding: 6px 10px;
   border-radius: 12px;
   background: #f8fafc;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.invoice-card-category .category-display-cell,
+.invoice-card-category .category-select {
   color: #263247;
   font-size: 0.9rem;
   font-weight: 400;
   line-height: 1.25;
-  text-align: center;
-  box-sizing: border-box;
 }
 
 .invoice-card-error {

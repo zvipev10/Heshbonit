@@ -1205,7 +1205,7 @@ function App() {
           </div>
         </div>
         <div className="invoice-card-meta">
-          <span>{renderEditableCell(rowIndex, 'date', res.date)}</span>
+          <span className="invoice-card-value">{renderEditableCell(rowIndex, 'date', res.date)}</span>
           <div className="invoice-card-category">
             {renderCategorySelect(rowIndex)}
           </div>
@@ -1217,15 +1217,15 @@ function App() {
         <div className="invoice-card-amounts">
           <div>
             <span>סה"כ</span>
-            <strong>{renderEditableCell(rowIndex, 'total', res.total != null ? `₪${res.total.toFixed(2)}` : '—', 'number')}</strong>
+            <strong className="invoice-card-value">{renderEditableCell(rowIndex, 'total', res.total != null ? `₪${res.total.toFixed(2)}` : '—', 'number')}</strong>
           </div>
           <div>
             <span>מע"מ</span>
-            <strong>{renderEditableCell(rowIndex, 'vat', res.vat != null ? `₪${res.vat.toFixed(2)}` : '—', 'number')}</strong>
+            <strong className="invoice-card-value">{renderEditableCell(rowIndex, 'vat', res.vat != null ? `₪${res.vat.toFixed(2)}` : '—', 'number')}</strong>
           </div>
           <div>
             <span>לפני מע"מ</span>
-            <strong>{renderEditableCell(rowIndex, 'payment', res.payment != null ? `₪${res.payment.toFixed(2)}` : '—', 'number')}</strong>
+            <strong className="invoice-card-value">{renderEditableCell(rowIndex, 'payment', res.payment != null ? `₪${res.payment.toFixed(2)}` : '—', 'number')}</strong>
           </div>
         </div>
       </article>
