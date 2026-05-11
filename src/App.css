@@ -993,13 +993,17 @@ input[type="file"] {
 }
 
 .invoice-card-category {
-  display: block;
-  width: 100%;
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 128px;
+  max-width: 100%;
 }
 
 .invoice-card-meta {
   color: #475569;
   font-weight: 600;
+  align-items: stretch;
+  flex-wrap: wrap;
 }
 
 .invoice-card-meta > span:first-child {
@@ -1012,9 +1016,9 @@ input[type="file"] {
   border-radius: 12px;
   background: #f8fafc;
   color: #263247;
-  font-size: 0.95rem;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
   box-sizing: border-box;
 }
 
@@ -1031,8 +1035,7 @@ input[type="file"] {
   text-align: center;
 }
 
-.invoice-card-amounts span,
-.invoice-card-category span {
+.invoice-card-amounts span {
   display: block;
   color: #7b879a;
   font-size: 0.78rem;
@@ -1051,11 +1054,16 @@ input[type="file"] {
 .invoice-card-category .category-select {
   min-width: 0;
   width: 100%;
-  text-align: right;
-}
-
-.invoice-card-category span {
-  display: none;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #263247;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .invoice-card-error {

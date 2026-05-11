@@ -1202,14 +1202,13 @@ function App() {
 
           <div className="invoice-card-title">
             <strong>{renderEditableCell(rowIndex, 'supplier', res.supplier === '—' ? '—' : res.supplier)}</strong>
-            <div className="invoice-card-category">
-              <span>קטגוריה</span>
-              {renderCategorySelect(rowIndex)}
-            </div>
           </div>
         </div>
         <div className="invoice-card-meta">
           <span>{renderEditableCell(rowIndex, 'date', res.date)}</span>
+          <div className="invoice-card-category">
+            {renderCategorySelect(rowIndex)}
+          </div>
           <span className={`morning-table-status ${getMorningStatus(res) === 'עבר למורנינג' ? 'morning-table-status-pass' : 'morning-table-status-fail'}`}>
             {getMorningStatus(res)}
           </span>
