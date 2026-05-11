@@ -1022,6 +1022,54 @@ input[type="file"] {
   box-sizing: border-box;
 }
 
+.invoice-card-meta > span:first-child .editable-cell,
+.invoice-card-category .editable-cell {
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.invoice-card .morning-table-status {
+  position: relative;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  margin-right: 0;
+  padding: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.invoice-card .morning-table-status::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: currentColor;
+  box-shadow:
+    13px 0 0 currentColor,
+    0 13px 0 currentColor,
+    13px 13px 0 currentColor;
+}
+
+.invoice-card .morning-table-status-pass {
+  background: transparent;
+  color: #0f766e;
+}
+
+.invoice-card .morning-table-status-fail {
+  background: transparent;
+  color: #dc2626;
+}
+
 .invoice-card-amounts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
