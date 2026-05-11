@@ -931,8 +931,8 @@ input[type="file"] {
 .invoice-card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid #e7eaf3;
   border-radius: 18px;
   background: #ffffff;
@@ -975,14 +975,14 @@ input[type="file"] {
   min-width: 0;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 4px;
   flex: 1 1 auto;
   text-align: right;
 }
 
 .invoice-card-title strong {
   color: #1f2937;
-  font-size: 1.08rem;
+  font-size: 1.02rem;
   line-height: 1.25;
 }
 
@@ -993,11 +993,7 @@ input[type="file"] {
 }
 
 .invoice-card-category {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  justify-content: end;
-  gap: 10px;
+  display: block;
   width: 100%;
 }
 
@@ -1006,15 +1002,31 @@ input[type="file"] {
   font-weight: 600;
 }
 
+.invoice-card-meta > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 112px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #263247;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
 .invoice-card-amounts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .invoice-card-amounts div {
-  padding: 10px 8px;
-  border-radius: 14px;
+  padding: 8px 6px;
+  border-radius: 12px;
   background: #f8fafc;
   text-align: center;
 }
@@ -1030,7 +1042,7 @@ input[type="file"] {
 .invoice-card-amounts strong {
   display: block;
   color: #263247;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.25;
   margin-top: 2px;
 }
@@ -1039,7 +1051,11 @@ input[type="file"] {
 .invoice-card-category .category-select {
   min-width: 0;
   width: 100%;
-  text-align: left;
+  text-align: right;
+}
+
+.invoice-card-category span {
+  display: none;
 }
 
 .invoice-card-error {
