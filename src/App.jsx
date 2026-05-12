@@ -78,7 +78,7 @@ function App() {
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
 
-  const sortResultsByDateAsc = (items) => {
+  const sortResultsByDateDesc = (items) => {
     return [...items].sort((a, b) => {
       if (a.failed) return 1
       if (b.failed) return -1
@@ -86,7 +86,7 @@ function App() {
       const dateB = parseDisplayDate(b.date)
       if (!dateA) return 1
       if (!dateB) return -1
-      return dateA - dateB
+      return dateB - dateA
     })
   }
 
@@ -219,7 +219,7 @@ function App() {
       if (json.success && json.invoices) {
         if (requestId !== invoiceLoadRequestRef.current) return
         const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateAsc(mappedInvoices))
+        setResult(sortResultsByDateDesc(mappedInvoices))
       }
     } catch (err) {
       if (requestId !== invoiceLoadRequestRef.current) return
@@ -409,7 +409,7 @@ function App() {
         }
       }
 
-      setResult(prev => sortResultsByDateAsc([...prev, ...results].filter(item => !isDuplicateResult(item))))
+      setResult(prev => sortResultsByDateDesc([...prev, ...results].filter(item => !isDuplicateResult(item))))
       const duplicateMessage = buildDuplicateMessage(duplicates)
       if (duplicateMessage) setDuplicateNotice(duplicateMessage)
     } catch (err) {
@@ -505,7 +505,7 @@ function App() {
         })
       }
 
-      setResult(prev => sortResultsByDateAsc([...prev, ...results].filter(item => !isDuplicateResult(item))))
+      setResult(prev => sortResultsByDateDesc([...prev, ...results].filter(item => !isDuplicateResult(item))))
       const duplicateMessage = buildDuplicateMessage(duplicates)
       if (duplicateMessage) setDuplicateNotice(duplicateMessage)
     } catch (err) {
@@ -1316,7 +1316,7 @@ function App() {
       const listJson = await listResponse.json()
       if (listJson.success && listJson.invoices) {
         const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateAsc(mappedInvoices))
+        setResult(sortResultsByDateDesc(mappedInvoices))
         setSelectedRows(new Set())
         setEditingCell(null)
       }
