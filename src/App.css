@@ -776,6 +776,27 @@ input[type="file"] {
   backdrop-filter: blur(10px);
 }
 
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  direction: rtl;
+  gap: 14px;
+  margin: 24px auto 0;
+}
+
+.pagination-status {
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.95rem;
+  min-width: 120px;
+  text-align: center;
+}
+
+.pagination-button {
+  min-width: 92px;
+}
+
 .bulk-actions-info {
   color: #263247;
   font-weight: 700;
@@ -1277,6 +1298,23 @@ input[type="file"] {
     display: grid;
     gap: 12px;
     order: 3;
+  }
+
+  .pagination-bar {
+    order: 4;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .pagination-button {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+
+  .pagination-status {
+    order: -1;
+    flex: 1 1 100%;
   }
 
   .bulk-actions {

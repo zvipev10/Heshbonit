@@ -10,6 +10,18 @@ const BLOB_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
 const ALLOWED_UPLOAD_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 const TAB_PENDING = 'pending'
 const TAB_APPROVED = 'approved'
+const APPROVED_PAGE_SIZE = 50
+const EMPTY_LIST_META = {
+  page: 1,
+  pageSize: APPROVED_PAGE_SIZE,
+  totalCount: 0,
+  unfilteredCount: 0,
+  totals: {
+    totalWithoutVat: 0,
+    vat: 0,
+    totalWithVat: 0,
+  },
+}
 
 const getUploadContentType = (file) => {
   if (file.type) return file.type
@@ -45,6 +57,8 @@ function App() {
   const [appliedDateTo, setAppliedDateTo] = useState('')
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [activeFilterPanel, setActiveFilterPanel] = useState(null)
+  const [approvedPage, setApprovedPage] = useState(1)
+  const [listMeta, setListMeta] = useState(EMPTY_LIST_META)
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const blobUrlsRef = useRef(new Set())
@@ -203,15 +217,27 @@ function App() {
     }
   }
 
-  const loadDataFromDatabase = async (status = activeTab) => {
+  const loadDataFromDatabase = async (status = activeTab, options = {}) => {
     const requestId = invoiceLoadRequestRef.current + 1
     invoiceLoadRequestRef.current = requestId
+    const page = options.page ?? (status === TAB_APPROVED ? approvedPage : 1)
+    const search = options.search ?? appliedSearch
+    const fromDate = options.fromDate ?? appliedDateFrom
+    const toDate = options.toDate ?? appliedDateTo
     const tabLabel = status === TAB_PENDING ? 'חדשות' : 'מאושרות'
     try {
       setError(null)
       setLoadingInvoices(true)
       setResult([])
-      const response = await fetch(`${API_BASE}/list?status=${encodeURIComponent(status)}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ status })
+      if (status === TAB_APPROVED) {
+        params.set('page', String(page))
+        params.set('pageSize', String(APPROVED_PAGE_SIZE))
+        if (search) params.set('vendor', search)
+        if (fromDate) params.set('fromDate', fromDate)
+        if (toDate) params.set('toDate', toDate)
+      }
+      const response = await fetch(`${API_BASE}/list?${params.toString()}`, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.success) {
         throw new Error(json?.error || 'Failed to load data from database')
@@ -220,6 +246,22 @@ function App() {
         if (requestId !== invoiceLoadRequestRef.current) return
         const mappedInvoices = json.invoices.map(mapInvoiceFromDatabase)
         setResult(sortResultsByDateDesc(mappedInvoices))
+        if (status === TAB_APPROVED) {
+          setApprovedPage(json.page || page)
+          setListMeta({
+            page: json.page || page,
+            pageSize: json.pageSize || APPROVED_PAGE_SIZE,
+            totalCount: json.totalCount ?? mappedInvoices.length,
+            unfilteredCount: json.unfilteredCount ?? json.totalCount ?? mappedInvoices.length,
+            totals: json.totals || EMPTY_LIST_META.totals,
+          })
+        } else {
+          setListMeta({
+            ...EMPTY_LIST_META,
+            totalCount: mappedInvoices.length,
+            unfilteredCount: mappedInvoices.length,
+          })
+        }
       }
     } catch (err) {
       if (requestId !== invoiceLoadRequestRef.current) return
@@ -244,13 +286,14 @@ function App() {
 
   const openTab = (status) => {
     setActiveTab(status)
+    setApprovedPage(1)
     setSelectedRows(new Set())
     setEditingCell(null)
     resetFilters()
     setError(null)
     setDuplicateNotice(null)
     setGmailSummary(null)
-    loadDataFromDatabase(status)
+    loadDataFromDatabase(status, { page: 1, search: '', fromDate: '', toDate: '' })
   }
 
   useEffect(() => {
@@ -737,9 +780,15 @@ function App() {
 
   const applyRowUpdates = async (rowKeys, transformRow) => {
     const patches = []
+    const totalsDelta = { totalWithoutVat: 0, vat: 0, totalWithVat: 0 }
     const nextResult = result.map((row) => {
       if (!rowKeys.has(row.rowKey) || row.failed) return row
       const updated = { ...transformRow(row), isDirty: false }
+      if (activeTab === TAB_APPROVED) {
+        totalsDelta.totalWithoutVat += (normalizeNumber(updated.payment) || 0) - (normalizeNumber(row.payment) || 0)
+        totalsDelta.vat += (normalizeNumber(updated.vat) || 0) - (normalizeNumber(row.vat) || 0)
+        totalsDelta.totalWithVat += (normalizeNumber(updated.total) || 0) - (normalizeNumber(row.total) || 0)
+      }
       if (row.isStoredRecord && typeof row.id === 'number') {
         const patch = buildChangedInvoicePatch(row, updated)
         if (Object.keys(patch).length > 0) {
@@ -751,12 +800,32 @@ function App() {
 
     if (patches.length === 0) {
       setResult(nextResult)
+      if (activeTab === TAB_APPROVED) {
+        setListMeta(prev => ({
+          ...prev,
+          totals: {
+            totalWithoutVat: prev.totals.totalWithoutVat + totalsDelta.totalWithoutVat,
+            vat: prev.totals.vat + totalsDelta.vat,
+            totalWithVat: prev.totals.totalWithVat + totalsDelta.totalWithVat,
+          },
+        }))
+      }
       return
     }
 
     setSaving(true)
     setError(null)
     setResult(nextResult)
+    if (activeTab === TAB_APPROVED) {
+      setListMeta(prev => ({
+        ...prev,
+        totals: {
+          totalWithoutVat: prev.totals.totalWithoutVat + totalsDelta.totalWithoutVat,
+          vat: prev.totals.vat + totalsDelta.vat,
+          totalWithVat: prev.totals.totalWithVat + totalsDelta.totalWithVat,
+        },
+      }))
+    }
 
     try {
       await Promise.all(patches.map(({ id, patch }) => patchInvoice(id, patch)))
@@ -764,6 +833,16 @@ function App() {
       setError(err.message)
       const failedKeys = new Set(patches.map(({ rowKey }) => rowKey))
       setResult(prev => prev.map(row => failedKeys.has(row.rowKey) ? { ...row, isDirty: true } : row))
+      if (activeTab === TAB_APPROVED) {
+        setListMeta(prev => ({
+          ...prev,
+          totals: {
+            totalWithoutVat: prev.totals.totalWithoutVat - totalsDelta.totalWithoutVat,
+            vat: prev.totals.vat - totalsDelta.vat,
+            totalWithVat: prev.totals.totalWithVat - totalsDelta.totalWithVat,
+          },
+        }))
+      }
     } finally {
       setSaving(false)
     }
@@ -850,6 +929,23 @@ function App() {
       })
 
       setResult(kept)
+      if (activeTab === TAB_APPROVED) {
+        const removedTotals = removed.reduce((totals, row) => ({
+          totalWithoutVat: totals.totalWithoutVat + (normalizeNumber(row.payment) || 0),
+          vat: totals.vat + (normalizeNumber(row.vat) || 0),
+          totalWithVat: totals.totalWithVat + (normalizeNumber(row.total) || 0),
+        }), { totalWithoutVat: 0, vat: 0, totalWithVat: 0 })
+        setListMeta(prev => ({
+          ...prev,
+          totalCount: Math.max(0, prev.totalCount - removed.length),
+          unfilteredCount: Math.max(0, prev.unfilteredCount - removed.length),
+          totals: {
+            totalWithoutVat: prev.totals.totalWithoutVat - removedTotals.totalWithoutVat,
+            vat: prev.totals.vat - removedTotals.vat,
+            totalWithVat: prev.totals.totalWithVat - removedTotals.totalWithVat,
+          },
+        }))
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -972,8 +1068,23 @@ function App() {
     if (!row) return
     const updatedRow = { ...updateRowValueInRow(row, field, value), isDirty: false }
     const patch = buildEditedFieldPatch(updatedRow, field)
+    const totalsDelta = {
+      totalWithoutVat: (normalizeNumber(updatedRow.payment) || 0) - (normalizeNumber(row.payment) || 0),
+      vat: (normalizeNumber(updatedRow.vat) || 0) - (normalizeNumber(row.vat) || 0),
+      totalWithVat: (normalizeNumber(updatedRow.total) || 0) - (normalizeNumber(row.total) || 0),
+    }
 
     setResult(prev => prev.map(item => item.rowKey === row.rowKey ? updatedRow : item))
+    if (activeTab === TAB_APPROVED) {
+      setListMeta(prev => ({
+        ...prev,
+        totals: {
+          totalWithoutVat: prev.totals.totalWithoutVat + totalsDelta.totalWithoutVat,
+          vat: prev.totals.vat + totalsDelta.vat,
+          totalWithVat: prev.totals.totalWithVat + totalsDelta.totalWithVat,
+        },
+      }))
+    }
 
     if (!row.isStoredRecord || typeof row.id !== 'number' || Object.keys(patch).length === 0) return
 
@@ -984,6 +1095,16 @@ function App() {
     } catch (err) {
       setError(err.message)
       setResult(prev => prev.map(item => item.rowKey === row.rowKey ? { ...item, isDirty: true } : item))
+      if (activeTab === TAB_APPROVED) {
+        setListMeta(prev => ({
+          ...prev,
+          totals: {
+            totalWithoutVat: prev.totals.totalWithoutVat - totalsDelta.totalWithoutVat,
+            vat: prev.totals.vat - totalsDelta.vat,
+            totalWithVat: prev.totals.totalWithVat - totalsDelta.totalWithVat,
+          },
+        }))
+      }
     } finally {
       setSaving(false)
     }
@@ -1130,7 +1251,8 @@ function App() {
 
   const applySearchFilter = (event) => {
     event?.preventDefault()
-    setAppliedSearch(searchDraft.trim().toLowerCase())
+    const nextSearch = searchDraft.trim().toLowerCase()
+    setAppliedSearch(nextSearch)
     setAppliedDateFrom('')
     setAppliedDateTo('')
     setDateFromDraft('')
@@ -1138,6 +1260,10 @@ function App() {
     setActiveFilterPanel(null)
     setFilterMenuOpen(false)
     setSelectedRows(new Set())
+    if (activeTab === TAB_APPROVED) {
+      setApprovedPage(1)
+      loadDataFromDatabase(TAB_APPROVED, { page: 1, search: nextSearch, fromDate: '', toDate: '' })
+    }
   }
 
   const applyDateFilter = (event) => {
@@ -1149,11 +1275,19 @@ function App() {
     setActiveFilterPanel(null)
     setFilterMenuOpen(false)
     setSelectedRows(new Set())
+    if (activeTab === TAB_APPROVED) {
+      setApprovedPage(1)
+      loadDataFromDatabase(TAB_APPROVED, { page: 1, search: '', fromDate: dateFromDraft, toDate: dateToDraft })
+    }
   }
 
   const clearFilters = () => {
     resetFilters()
     setSelectedRows(new Set())
+    if (activeTab === TAB_APPROVED) {
+      setApprovedPage(1)
+      loadDataFromDatabase(TAB_APPROVED, { page: 1, search: '', fromDate: '', toDate: '' })
+    }
   }
 
   const openFilterPanel = (panel) => {
@@ -1312,14 +1446,14 @@ function App() {
         throw new Error(json.error || 'Failed to save to database')
       }
 
-      const listResponse = await fetch(`${API_BASE}/list?status=${encodeURIComponent(activeTab)}`, { cache: 'no-store' })
-      const listJson = await listResponse.json()
-      if (listJson.success && listJson.invoices) {
-        const mappedInvoices = listJson.invoices.map(mapInvoiceFromDatabase)
-        setResult(sortResultsByDateDesc(mappedInvoices))
-        setSelectedRows(new Set())
-        setEditingCell(null)
-      }
+      await loadDataFromDatabase(activeTab, {
+        page: activeTab === TAB_APPROVED ? approvedPage : 1,
+        search: appliedSearch,
+        fromDate: appliedDateFrom,
+        toDate: appliedDateTo,
+      })
+      setSelectedRows(new Set())
+      setEditingCell(null)
 
       setError(null)
       alert(`בסיס הנתונים עודכן: ${json.savedCount} נשמרו/עודכנו, ${json.deletedCount || 0} נמחקו`)
@@ -1349,6 +1483,18 @@ function App() {
     return true
   })
   const successResults = filteredResults.filter(r => !r.failed)
+  const isApprovedTab = activeTab === TAB_APPROVED
+  const listTotalCount = isApprovedTab ? listMeta.totalCount : filteredResults.length
+  const unfilteredTotalCount = isApprovedTab ? listMeta.unfilteredCount : visibleResults.length
+  const totalPages = isApprovedTab ? Math.max(1, Math.ceil((listMeta.totalCount || 0) / (listMeta.pageSize || APPROVED_PAGE_SIZE))) : 1
+  const pageRowOffset = isApprovedTab ? ((listMeta.page || 1) - 1) * (listMeta.pageSize || APPROVED_PAGE_SIZE) : 0
+  const summaryTotals = isApprovedTab
+    ? listMeta.totals
+    : {
+        totalWithoutVat: successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0),
+        vat: successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0),
+        totalWithVat: successResults.reduce((sum, res) => sum + (res.total ?? 0), 0),
+      }
   const hasSelectedRows = selectedRows.size > 0
   const selectedStoredRowsCount = visibleResults.filter(row => selectedRows.has(row.rowKey) && row.isStoredRecord && typeof row.id === 'number' && !row.failed).length
   const allSelected = filteredResults.length > 0 && filteredResults.every(row => selectedRows.has(row.rowKey))
@@ -1358,6 +1504,17 @@ function App() {
     : [appliedDateFrom && `מתאריך ${appliedDateFrom}`, appliedDateTo && `עד ${appliedDateTo}`].filter(Boolean).join(' · ')
   const toggleAll = () => {
     setSelectedRows(allSelected ? new Set() : new Set(filteredResults.map(row => row.rowKey)))
+  }
+  const goToApprovedPage = (page) => {
+    const nextPage = Math.max(1, Math.min(page, totalPages))
+    setSelectedRows(new Set())
+    setApprovedPage(nextPage)
+    loadDataFromDatabase(TAB_APPROVED, {
+      page: nextPage,
+      search: appliedSearch,
+      fromDate: appliedDateFrom,
+      toDate: appliedDateTo,
+    })
   }
 
   return (
@@ -1453,9 +1610,9 @@ function App() {
         <section className="results">
           <div className="results-header">
             <div className="results-title-row">
-              <h2>דוח חשבוניות ({filteredResults.length})</h2>
+              <h2>דוח חשבוניות ({listTotalCount})</h2>
               {hasActiveFilters && (
-                <span className="filter-count">מתוך {visibleResults.length}</span>
+                <span className="filter-count">מתוך {unfilteredTotalCount}</span>
               )}
               {hasActiveFilters && (
                 <span className="active-filter-chip">
@@ -1536,15 +1693,15 @@ function App() {
             <div className="summary-cards">
               <div className="summary-card summary-card-before-vat">
                 <span className="summary-label">לפני מע"מ</span>
-                <strong>₪{successResults.reduce((sum, res) => sum + (res.payment ?? 0), 0).toFixed(2)}</strong>
+                <strong>₪{(summaryTotals.totalWithoutVat || 0).toFixed(2)}</strong>
               </div>
               <div className="summary-card summary-card-vat">
                 <span className="summary-label">מע"מ</span>
-                <strong>₪{successResults.reduce((sum, res) => sum + (res.vat ?? 0), 0).toFixed(2)}</strong>
+                <strong>₪{(summaryTotals.vat || 0).toFixed(2)}</strong>
               </div>
               <div className="summary-card summary-card-total">
                 <span className="summary-label">סה"כ</span>
-                <strong>₪{successResults.reduce((sum, res) => sum + (res.total ?? 0), 0).toFixed(2)}</strong>
+                <strong>₪{(summaryTotals.totalWithVat || 0).toFixed(2)}</strong>
               </div>
             </div>
           )}
@@ -1575,7 +1732,7 @@ function App() {
                     return res.failed ? (
                       <tr key={res.rowKey} className="row-failed">
                         <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
-                        <td>{i + 1}</td>
+                        <td>{pageRowOffset + i + 1}</td>
                         <td colSpan={6} className="failed-cell">{res.fileName} — {res.error}</td>
                         <td></td>
                         <td></td>
@@ -1587,7 +1744,7 @@ function App() {
                         className={getRowClassName(res)}
                       >
                         <td><input type="checkbox" checked={selectedRows.has(res.rowKey)} onChange={() => toggleRow(res.rowKey)} /></td>
-                        <td>{i + 1}</td>
+                        <td>{pageRowOffset + i + 1}</td>
                         <td>{renderEditableCell(rowIndex, 'date', res.date)}</td>
                         <td>
                           <div className="supplier-cell">
@@ -1637,8 +1794,29 @@ function App() {
 
           {filteredResults.length > 0 && (
             <div className="invoice-card-list">
-              {filteredResults.map(renderMobileInvoiceCard)}
+              {filteredResults.map((row, index) => renderMobileInvoiceCard(row, pageRowOffset + index))}
             </div>
+          )}
+
+          {isApprovedTab && totalPages > 1 && (
+            <nav className="pagination-bar" aria-label="עמודי חשבוניות">
+              <button
+                type="button"
+                className="app-button app-button-outline pagination-button"
+                onClick={() => goToApprovedPage((listMeta.page || 1) - 1)}
+                disabled={(listMeta.page || 1) <= 1 || loadingInvoices}
+              >
+                הקודם</button>
+              <span className="pagination-status">
+                עמוד {listMeta.page || 1} מתוך {totalPages}</span>
+              <button
+                type="button"
+                className="app-button app-button-outline pagination-button"
+                onClick={() => goToApprovedPage((listMeta.page || 1) + 1)}
+                disabled={(listMeta.page || 1) >= totalPages || loadingInvoices}
+              >
+                הבא</button>
+            </nav>
           )}
         </section>
       )}
