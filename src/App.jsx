@@ -113,16 +113,6 @@ function App() {
 
   const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100
 
-  const displayDateToISO = (value) => {
-    if (!value || value === '—') return ''
-    const parsed = parseDisplayDate(value)
-    if (!parsed) return ''
-    const year = parsed.getFullYear()
-    const month = String(parsed.getMonth() + 1).padStart(2, '0')
-    const day = String(parsed.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
   const getMorningStatus = (row) => {
     if (!row.isStoredRecord) return '—'
     if (row.morningSyncStatus === 'sent' && row.morningFileSyncStatus !== 'failed') return 'עבר למורנינג'
@@ -131,13 +121,6 @@ function App() {
 
   const getCategoryLabel = (category) => {
     return category?.name || category?.title || ''
-  }
-
-  const buildDuplicateKey = (invoice) => {
-    const dateKey = displayDateToISO(invoice.date)
-    const totalKey = normalizeAmount(invoice.total)
-    if (!dateKey || !totalKey) return null
-    return `${dateKey}|${totalKey}`
   }
 
   const isDuplicateResult = (item) => Boolean(item?.duplicate)
@@ -1364,104 +1347,6 @@ function App() {
         </div>
       </article>
     )
-  }
-
-  const handleSaveToDatabase = async () => {
-    setSaving(true)
-    setError(null)
-    setDuplicateNotice(null)
-
-    try {
-      const duplicateGroups = new Map()
-
-      result.forEach((res, index) => {
-        if (res.failed) return
-        const key = buildDuplicateKey(res)
-        if (!key) return
-        if (!duplicateGroups.has(key)) duplicateGroups.set(key, [])
-        duplicateGroups.get(key).push({
-          index,
-          rowNumber: index + 1,
-          fileName: res.fileName,
-          isStoredRecord: !!res.isStoredRecord,
-          supplier: res.supplier,
-          date: res.date,
-          total: res.total,
-        })
-      })
-
-      const duplicateEntries = Array.from(duplicateGroups.values()).filter(
-        (group) => group.length > 1 && group.some((item) => item.isStoredRecord) && group.some((item) => !item.isStoredRecord)
-      )
-
-      if (duplicateEntries.length > 0) {
-        const duplicateRows = duplicateEntries.flatMap((group) => group.filter((item) => !item.isStoredRecord)).sort((a, b) => a.rowNumber - b.rowNumber)
-        const duplicateSummary = duplicateRows
-          .map((item) => `שורה ${item.rowNumber}: ${item.fileName} | ${item.date} | ₪${normalizeAmount(item.total)}`)
-          .join('\n')
-        throw new Error(`נמצאו ${duplicateRows.length} חשבוניות כפולות שכבר קיימות בבסיס הנתונים:\n${duplicateSummary}`)
-      }
-
-      const dateToISO = (hebrewDate) => {
-        if (!hebrewDate || hebrewDate === '—') return null
-        const parts = hebrewDate.split('.')
-        if (parts.length === 3) {
-          const day = parts[0].padStart(2, '0')
-          const month = parts[1].padStart(2, '0')
-          const year = parts[2]
-          return `${year}-${month}-${day}`
-        }
-        return hebrewDate
-      }
-
-      const invoicesToSave = result
-        .filter(res => !res.failed)
-        .map(res => ({
-          id: typeof res.id === 'number' ? res.id : null,
-          fileName: res.fileName,
-          mimeType: res.mimeType || null,
-          ...(res.isStoredRecord ? {} : { fileData: res.fileData || null }),
-          vendorName: res.supplier === '—' ? null : res.supplier,
-          date: dateToISO(res.date),
-          totalWithVat: res.total,
-          originalTotalWithVat: res.originalTotalWithVat ?? res.total,
-          totalWithoutVat: res.payment,
-          vat: res.vat,
-          printed: res.printed || 'לא',
-          status: res.status || activeTab,
-          morningCategoryId: res.morningCategoryId || null,
-          morningCategoryName: res.morningCategoryName || null,
-          morningCategoryCode: res.morningCategoryCode ?? null,
-          currency: 'ILS',
-          }))
-
-      const response = await fetch(`${API_BASE}/save-batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoices: invoicesToSave, status: activeTab }),
-      })
-
-      const json = await response.json()
-      if (!response.ok || !json.success) {
-        throw new Error(json.error || 'Failed to save to database')
-      }
-
-      await loadDataFromDatabase(activeTab, {
-        page: activeTab === TAB_APPROVED ? approvedPage : 1,
-        search: appliedSearch,
-        fromDate: appliedDateFrom,
-        toDate: appliedDateTo,
-      })
-      setSelectedRows(new Set())
-      setEditingCell(null)
-
-      setError(null)
-      alert(`בסיס הנתונים עודכן: ${json.savedCount} נשמרו/עודכנו, ${json.deletedCount || 0} נמחקו`)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
   }
 
   const visibleResults = result.filter(r => !isDuplicateResult(r))
